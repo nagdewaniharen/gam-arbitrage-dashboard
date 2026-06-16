@@ -1,0 +1,167 @@
+// GAM Arbitrage Reporting Dashboard — Prisma schema
+// Canonical reference for the database. See docs/PRD.md §8.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [citext, pgcrypto]
+}
+
+// ============================================================================
+// Core reporting tables
+// ============================================================================
+
+/// One row per (network × date × full dimension combo) from GAM Reporting API.
+/// Upserted by `gam_reports_unique_key` on every cron run.
+model GamReport {
+  id          BigInt   @id @default(autoincrement())
+  networkId   String   @default("23340025403") @map("network_id")
+  date        DateTime @db.Date
+  campaign    String   @default("")
+  source      String   @default("")
+  headline    String   @default("")
+  lander      String   @default("")
+  image       String   @default("")
+  adUnit      String   @default("") @map("ad_unit")
+  page        String   @default("")
+  impressions BigInt   @default(0)
+  clicks      BigInt   @default(0)
+  revenue     Decimal  @default(0) @db.Decimal(14, 4)
+  ecpm        Decimal  @default(0) @db.Decimal(10, 4)
+  viewability Decimal  @default(0) @db.Decimal(5, 4)
+  matchRate   Decimal  @default(0) @map("match_rate") @db.Decimal(5, 4)
+  fetchedAt   DateTime @default(now()) @map("fetched_at") @db.Timestamptz()
+
+  @@unique([networkId, date, campaign, source, headline, lander, image, adUnit, page], name: "gam_reports_unique_key")
+  @@index([date])
+  @@index([date, campaign])
+  @@index([date, source])
+  @@index([date, adUnit])
+  @@index([networkId, date])
+  @@map("gam_reports")
+}
+
+/// Ad spend per (network × date × campaign × source). Manual input, CSV upload,
+/// or pulled from MGID Partner API (Phase 3).
+model AdSpend {
+  id          BigInt   @id @default(autoincrement())
+  networkId   String   @map("network_id")
+  date        DateTime @db.Date
+  campaign    String   @default("")
+  source      String   @default("")
+  spend       Decimal  @default(0) @db.Decimal(14, 4)
+  clicks      BigInt   @default(0)
+  impressions BigInt   @default(0)
+  enteredBy   String   @map("entered_by") // 'manual:<email>' | 'csv' | 'mgid-api'
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@unique([networkId, date, campaign, source], name: "ad_spend_unique_key")
+  @@index([date])
+  @@index([date, campaign])
+  @@map("ad_spend")
+}
+
+// ============================================================================
+// Auth & users (Phase 2)
+// ============================================================================
+
+enum UserRole {
+  admin
+  user
+}
+
+model User {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email       String    @unique @db.Citext
+  name        String?
+  role        UserRole  @default(user)
+  isActive    Boolean   @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz()
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("users")
+}
+
+// ============================================================================
+// Audit log — every mutating action
+// ============================================================================
+
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  actorEmail  String   @map("actor_email")
+  action      String // e.g., 'spend.create', 'cron.refresh', 'csv.upload', 'user.role_change'
+  target      String?
+  metadata    Json?    @db.JsonB
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_log")
+}
+
+// ============================================================================
+// Cron run history — supports `last successful run` UI + alerting
+// ============================================================================
+
+enum CronStatus {
+  running
+  succeeded
+  failed
+}
+
+model CronRun {
+  id           BigInt     @id @default(autoincrement())
+  job          String // 'gam.refresh' | 'mgid.refresh' | 'alerts.evaluate'
+  status       CronStatus
+  startedAt    DateTime   @default(now()) @map("started_at") @db.Timestamptz()
+  finishedAt   DateTime?  @map("finished_at") @db.Timestamptz()
+  rowsAffected Int?       @map("rows_affected")
+  error        String?
+  metadata     Json?      @db.JsonB
+
+  @@index([job, startedAt])
+  @@map("cron_runs")
+}
+
+// ============================================================================
+// Alert rules + events (Phase 4)
+// ============================================================================
+
+enum AlertChannel {
+  slack
+}
+
+model AlertRule {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  metric      String // 'ecpm' | 'revenue' | 'match_rate'
+  comparison  String // 'drop_pct_vs_7d_avg' | 'below_absolute' etc.
+  threshold   Decimal      @db.Decimal(10, 4)
+  channel     AlertChannel @default(slack)
+  isEnabled   Boolean      @default(true) @map("is_enabled")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  events      AlertEvent[]
+
+  @@map("alert_rules")
+}
+
+model AlertEvent {
+  id        BigInt    @id @default(autoincrement())
+  ruleId    String    @map("rule_id") @db.Uuid
+  rule      AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  triggered Boolean
+  context   Json?     @db.JsonB
+  firedAt   DateTime  @default(now()) @map("fired_at") @db.Timestamptz()
+
+  @@index([ruleId, firedAt])
+  @@map("alert_events")
+}

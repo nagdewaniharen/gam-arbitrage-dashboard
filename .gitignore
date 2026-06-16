@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Secrets — NEVER COMMIT
+secrets/
+*.pem
+*.key
+**/service-account*.json
+**/gcp-*.json
+**/gam-*.json
+!packages/db/prisma/schema.prisma
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Database
+*.sqlite
+*.sqlite-journal
+data/postgres/
+
+# Storybook
+storybook-static/
+
+# Misc
+.cache/
+.tmp/
+tmp/

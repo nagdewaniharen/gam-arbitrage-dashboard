@@ -1,0 +1,32 @@
+{
+  "name": "gam-arbitrage-reporting-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GAM Arbitrage Reporting Dashboard — monorepo root",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "db:generate": "pnpm --filter @gam/db generate",
+    "db:migrate": "pnpm --filter @gam/db migrate:dev",
+    "db:seed": "pnpm --filter @gam/db seed",
+    "db:studio": "pnpm --filter @gam/db studio",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "prettier": "^3.3.3",
+    "turbo": "^2.1.0",
+    "typescript": "^5.5.4"
+  }
+}

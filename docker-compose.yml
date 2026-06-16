@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gam_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gam_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-gam_arbitrage}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gam} -d ${POSTGRES_DB:-gam_arbitrage}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: gam_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gam}:${POSTGRES_PASSWORD:-gam_dev_password}@postgres:5432/${POSTGRES_DB:-gam_arbitrage}?schema=public
+      API_PORT: 4000
+      API_HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:4000}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      INTERNAL_CRON_SECRET: ${INTERNAL_CRON_SECRET:-dev_only_change_me}
+      GAM_NETWORK_CODE: ${GAM_NETWORK_CODE:-23340025403}
+      GAM_REPORT_TIMEZONE: ${GAM_REPORT_TIMEZONE:-Asia/Kolkata}
+    ports:
+      - "${API_PORT:-4000}:4000"
+    profiles: ["full"]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: gam_web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    ports:
+      - "3001:3000"
+    profiles: ["full"]
+
+volumes:
+  postgres_data:
+    driver: local

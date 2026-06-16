@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "@gam/db": ["../../packages/db/src"],
+      "@gam/types": ["../../packages/types/src"]
+    }
+  },
+  "include": ["src/**/*"]
+}
