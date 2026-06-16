@@ -16,7 +16,7 @@ CREATE TYPE "AlertChannel" AS ENUM ('slack');
 -- CreateTable
 CREATE TABLE "gam_reports" (
     "id" BIGSERIAL NOT NULL,
-    "network_id" TEXT NOT NULL DEFAULT '23340025403',
+    "network_id" TEXT NOT NULL DEFAULT '<YOUR_NETWORK_CODE>',
     "date" DATE NOT NULL,
     "campaign" TEXT NOT NULL DEFAULT '',
     "source" TEXT NOT NULL DEFAULT '',

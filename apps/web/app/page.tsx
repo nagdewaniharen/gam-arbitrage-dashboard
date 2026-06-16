@@ -14,9 +14,11 @@ import { CrossAnalysis } from '@/components/CrossAnalysis';
 import { CsvUpload } from '@/components/CsvUpload';
 import { CostRoi } from '@/components/CostRoi';
 import { SpendForm } from '@/components/SpendForm';
+import { CompareDates } from '@/components/CompareDates';
+import { EmptyState } from '@/components/EmptyState';
 import { Footer } from '@/components/Footer';
 
-const NETWORK_CODE = process.env.NEXT_PUBLIC_NETWORK_CODE ?? '23340025403';
+const NETWORK_CODE = process.env.NEXT_PUBLIC_NETWORK_CODE ?? '';
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>('7d');
@@ -62,6 +64,7 @@ export default function DashboardPage() {
 
   const status = useQuery({ queryKey: ['status'], queryFn: () => api.status() });
   const s = stats.data;
+  const dbEmpty = status.data?.totalRows === 0;
 
   // RPV = revenue per impression (closest proxy to "revenue per page visit"
   // with our data). Real RPV would require GA / page-view tracking.
@@ -75,6 +78,12 @@ export default function DashboardPage() {
         status={status.data}
         networkCode={NETWORK_CODE}
       />
+
+      {dbEmpty ? (
+        <section className="mb-4">
+          <EmptyState />
+        </section>
+      ) : null}
 
       {/* KPI cards — 5 cards including RPV */}
       <section className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
@@ -175,6 +184,11 @@ export default function DashboardPage() {
       {/* Cost & ROI */}
       <section className="mb-4">
         <CostRoi period={period} />
+      </section>
+
+      {/* Date-range compare */}
+      <section className="mb-4">
+        <CompareDates />
       </section>
 
       {/* Spend entry */}

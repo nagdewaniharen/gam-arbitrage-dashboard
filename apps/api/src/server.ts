@@ -10,6 +10,7 @@ import { env } from './config/env.js';
 import { registerRoutes } from './routes/index.js';
 import { correlationIdPlugin } from './plugins/correlation-id.js';
 import { auditLogPlugin } from './plugins/audit-log.js';
+import { authPlugin } from './plugins/auth.js';
 
 async function buildServer() {
   const app = Fastify({
@@ -24,6 +25,7 @@ async function buildServer() {
   });
 
   await app.register(correlationIdPlugin);
+  await app.register(authPlugin);
   await app.register(auditLogPlugin);
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, {

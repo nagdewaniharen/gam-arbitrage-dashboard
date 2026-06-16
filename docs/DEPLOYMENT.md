@@ -91,7 +91,7 @@ Copy the App Runner **service ARN** and **default URL** (e.g. `https://abc123.ap
 4. Build settings: leave auto-detected (Next.js 15 SSR).
 5. Environment variables:
    - `NEXT_PUBLIC_API_URL` = `https://<app-runner-url-from-step-4>`
-   - `NEXT_PUBLIC_NETWORK_CODE` = `23340025403`
+   - `NEXT_PUBLIC_NETWORK_CODE` = `<YOUR_NETWORK_CODE>`
    - `GOOGLE_OAUTH_CLIENT_ID` = (after creating OAuth credentials)
    - `GOOGLE_OAUTH_CLIENT_SECRET`
    - `ALLOWED_GOOGLE_DOMAIN` = `groviaindia.shop` (or whichever Workspace domain)

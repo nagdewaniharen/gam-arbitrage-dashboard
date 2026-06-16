@@ -109,7 +109,10 @@ Critical local-dev variables:
 | `DATABASE_URL` | `postgresql://gam:gam_dev_password@localhost:5432/gam_arbitrage` | Matches `docker-compose.yml` |
 | `API_PORT` | `4000` | |
 | `WEB_ORIGIN` | `http://localhost:3000` | CORS allowlist |
-| `GAM_NETWORK_CODE` | `23340025403` | River Five Global |
+| `GAM_NETWORK_CODE` | *(required)* | Read from `.env` only — never hardcoded |
+| `ALLOWED_GOOGLE_DOMAIN` | *(required if SSO on)* | Workspace domain that can sign in |
+| `BOOTSTRAP_ADMIN_EMAIL` | *(optional)* | First user with this email is auto-promoted to admin |
+| `GAM_API_VERSION` | `v202511` | Override if Google retires this version |
 | `GAM_SERVICE_ACCOUNT_JSON_PATH` | `./secrets/gam-service-account.json` | **Gitignored**; receive from TL via secure channel |
 
 ## GAM Service Account — handover to TL
@@ -120,14 +123,21 @@ The team lead (GAM admin) provisions the service account by following [`docs/RUN
 
 | Phase | Status |
 | --- | --- |
-| 0 — Docs + scaffold + Docker + CI | ⏳ In progress |
-| 1A — DB + API + CSV upload | ☐ |
-| 1B — Dashboard UI | ☐ |
-| 2A — GAM API integration | ☐ (blocked on TL service-account handover) |
-| 2B — Cross-dim + Top/Bottom | ☐ |
-| 2C — Google Workspace SSO + roles | ☐ |
-| 3 — Cost / ROI + MGID API | ☐ |
-| 4 — Slack alerts + date compare | ☐ |
+| 0 — Docs + scaffold + Docker + CI | ✅ Done |
+| 1A — DB + API + CSV upload | ✅ Done (16 endpoints + Swagger) |
+| 1B — Dashboard UI | ✅ Done (Linear-style polish, 5 KPI cards inc. RPV, all sections) |
+| 2A — GAM API integration | ✅ Code complete (SOAP v202511) — blocked on TL adding SA email inside GAM |
+| 2B — Cross-dim + Top/Bottom | ✅ Done |
+| 2C — Google Workspace SSO + roles | ✅ Code complete — needs `GOOGLE_OAUTH_CLIENT_ID`/`SECRET` from GCP Console |
+| 3 — Cost / ROI + MGID API | ✅ Cost/ROI live (joins gam_reports + ad_spend); MGID stubbed, needs Partner API key |
+| 4 — Slack alerts + date compare | ✅ Engine + UI done; needs Slack incoming webhook URL |
+| Infra — Supabase Pro + AWS scripts | ✅ DB live on Supabase; `infra/aws/setup.sh` ready, not yet executed |
+
+### Admin URLs (when SSO is on)
+
+- `/admin/users` — promote / demote / deactivate
+- `/admin/alerts` — CRUD alert rules + "Evaluate now"
+- `/admin/audit` — searchable mutation log
 
 ## Contributing
 

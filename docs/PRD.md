@@ -185,7 +185,7 @@ Targeting model:
 
 | Field | Value |
 | --- | --- |
-| GAM Network Code | `23340025403` |
+| GAM Network Code | `<YOUR_NETWORK_CODE>` |
 | Publisher Network | River Five Global |
 | Ad Units | `site_top`, `site_anchor`, `site_rewarded`, `site_interstitial`, `site_in_content` |
 | Authentication | OAuth 2.0 — service account (server-to-server) |
@@ -206,7 +206,7 @@ PostgreSQL 16, managed via Prisma migrations. The canonical definition lives in 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | `bigserial PK` | |
-| `network_id` | `text NOT NULL DEFAULT '23340025403'` | **Reserved for multi-tenant**; single value today |
+| `network_id` | `text NOT NULL DEFAULT '<YOUR_NETWORK_CODE>'` | **Reserved for multi-tenant**; single value today |
 | `date` | `date NOT NULL` | Report date (IST) |
 | `campaign` | `text NOT NULL DEFAULT ''` | |
 | `source` | `text NOT NULL DEFAULT ''` | |

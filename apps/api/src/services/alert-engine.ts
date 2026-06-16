@@ -22,7 +22,11 @@ export async function evaluateAlerts(log: {
     try {
       const triggered = await checkRule(rule);
       const event = await prisma.alertEvent.create({
-        data: { ruleId: rule.id, triggered, context: triggered ? { firedAt: new Date().toISOString() } : null },
+        data: {
+          ruleId: rule.id,
+          triggered,
+          ...(triggered ? { context: { firedAt: new Date().toISOString() } } : {}),
+        },
       });
       if (triggered) {
         fired++;

@@ -36,7 +36,7 @@ services:
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:4000}
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       INTERNAL_CRON_SECRET: ${INTERNAL_CRON_SECRET:-dev_only_change_me}
-      GAM_NETWORK_CODE: ${GAM_NETWORK_CODE:-23340025403}
+      GAM_NETWORK_CODE: ${GAM_NETWORK_CODE:-<YOUR_NETWORK_CODE>}
       GAM_REPORT_TIMEZONE: ${GAM_REPORT_TIMEZONE:-Asia/Kolkata}
     ports:
       - "${API_PORT:-4000}:4000"

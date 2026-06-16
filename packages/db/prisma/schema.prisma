@@ -21,7 +21,8 @@ datasource db {
 /// Upserted by `gam_reports_unique_key` on every cron run.
 model GamReport {
   id          BigInt   @id @default(autoincrement())
-  networkId   String   @default("23340025403") @map("network_id")
+  // No DB-level default — always set explicitly from env.GAM_NETWORK_CODE
+  networkId   String   @map("network_id")
   date        DateTime @db.Date
   campaign    String   @default("")
   source      String   @default("")

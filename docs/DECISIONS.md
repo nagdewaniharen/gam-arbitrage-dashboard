@@ -92,7 +92,7 @@ Each ADR is a small, append-only record. Format:
 ## ADR-008 — Multi-tenant ready, single-tenant in use
 - **Date**: 2026-06-15
 - **Status**: Accepted
-- **Context**: Today we only serve River Five Global (network `23340025403`). Future may add networks.
+- **Context**: Today we only serve River Five Global (network `<YOUR_NETWORK_CODE>`). Future may add networks.
 - **Decision**: Every reporting row carries `network_id`. Today every query implicitly scopes to the single network; tomorrow we flip a config and add per-user network ACLs without a migration.
 - **Consequences**:
   - One extra column on hot tables (cheap).
@@ -116,3 +116,52 @@ Each ADR is a small, append-only record. Format:
 - **Consequences**:
   - One more endpoint to maintain — worth it.
   - Audits become possible: paste a CSV from GAM, see exactly which rows our cron would have inserted.
+
+## ADR-011 — Supabase Pro for the production database (superseding RDS plan)
+- **Date**: 2026-06-16
+- **Status**: Accepted (supersedes the RDS direction in ADR-005)
+- **Context**: ADR-005 picked AWS RDS, but Supabase Pro gives PITR + daily backups + a browsable Table Editor at $25/mo, satisfying PRD §15 durability. RDS adds ops overhead for marginal benefit at our scale.
+- **Decision**: **Supabase Pro** is the production DB. Connection via session-pooler URL for both runtime and migrations (Supabase disables IPv4 on the direct connection).
+- **Consequences**:
+  - One less AWS service to manage.
+  - TL / outsourced devs can be granted read-only access to Supabase Table Editor without VPN setup.
+  - If we outgrow Supabase, `pg_dump → pg_restore` to RDS is a 30-min migration.
+
+## ADR-012 — GAM client via raw SOAP, not `googleapis` package
+- **Date**: 2026-06-16
+- **Status**: Accepted
+- **Context**: The `googleapis` npm package's GAM surface is partial and unstable across versions; the REST migration is incomplete; the official SOAP `ReportService.runReportJob → getReportJobStatus → getReportDownloadURL` flow is the canonical and reliable path.
+- **Decision**: Hand-rolled SOAP envelope construction in `apps/api/src/services/gam-client.ts`, authenticated with `google-auth-library` (JWT → access token), version `v202511`. Element order matches GAM XSD strictly. Version is env-overridable via `GAM_API_VERSION`.
+- **Consequences**:
+  - ~150 lines of XML strings to maintain.
+  - When Google retires v202511 (~9 months), bump `GAM_API_VERSION` in env; if XSD changes, re-order elements per fault response.
+  - Zero dependency on a fragile third-party GAM wrapper.
+
+## ADR-013 — Workspace SSO via NextAuth JWT cookies (no React SessionProvider)
+- **Date**: 2026-06-16
+- **Status**: Accepted
+- **Context**: NextAuth v5 (beta) ships `next-auth/react` SessionProvider with unstable export paths across betas.
+- **Decision**: Use JWT-cookie-only auth flow. Sign-in via direct `<a href="/api/auth/signin/google">` link. Frontend reads session from `/api/auth/session` directly with TanStack Query. Edge middleware decodes JWT claims for quick gating; the Fastify API independently verifies the same JWT before serving data.
+- **Consequences**:
+  - No `useSession()` hook in client components — minor DX cost.
+  - Eliminates the most common NextAuth v5 beta breakage class.
+  - Identity layer is portable: same cookie validation works in App Runner, AWS Lambda, or any Node host.
+
+## ADR-014 — Workspace gate is strict by default; refuse to start in "any-Google-account" mode
+- **Date**: 2026-06-16
+- **Status**: Accepted
+- **Context**: If `GOOGLE_OAUTH_CLIENT_ID` is configured but `ALLOWED_GOOGLE_DOMAIN` is missing, the safest behavior is to FAIL closed (refuse SSO) rather than allow ANY Google account.
+- **Decision**: Boot-time check logs `FATAL` and disables SSO. Also pass `hd=<domain>` to Google's OAuth screen for defense-in-depth and re-verify `profile.hd === ALLOWED_GOOGLE_DOMAIN` server-side in the signIn callback.
+- **Consequences**:
+  - Misconfiguration is immediately visible.
+  - No silent expansion of access.
+  - Admin-only pages additionally gated by `role === 'admin'` claim at the edge.
+
+## ADR-015 — Real GAM network code is never in committed source
+- **Date**: 2026-06-16
+- **Status**: Accepted
+- **Context**: Product owner asked that the production network code (publicly identifying the publisher) never appear in any commit. The PRD originally carried it as a default value.
+- **Decision**: All source, configs, and docs use the placeholder `<YOUR_NETWORK_CODE>` or read `env.GAM_NETWORK_CODE`. Zod env validation makes the variable required at boot. Real value lives only in `.env` (gitignored) and AWS Secrets Manager.
+- **Consequences**:
+  - Cold-clone setup requires copying `.env.example → .env` and filling in the real code (already documented in README).
+  - Outsourced devs can be onboarded with a DEMO_NETWORK code for staging without exposing the prod one.

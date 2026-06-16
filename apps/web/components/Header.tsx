@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import type { Period, StatusResponse } from '@gam/types';
 import { PeriodSelector } from './PeriodSelector';
+import { UserMenu } from './UserMenu';
 import { freshnessTier, relativeTime, formatIST } from '@/lib/time';
 import { cn } from '@/lib/cn';
 
@@ -91,6 +92,7 @@ export function Header({
           {refresh.isPending ? 'Refreshing' : 'Refresh'}
         </button>
         <PeriodSelector value={period} onChange={onPeriodChange} />
+        <UserMenu />
       </div>
       {toast ? (
         <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-lg text-sm bg-[--color-surface-3] border border-[--color-border-strong] shadow-2xl">

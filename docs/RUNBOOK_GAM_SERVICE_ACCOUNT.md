@@ -18,7 +18,7 @@ Service accounts are created inside **Google Cloud Console** (a GCP project), th
 
 Before you start, confirm:
 
-- [ ] You have an active **Google account** that is **already an admin in GAM** for network `23340025403` (River Five Global).
+- [ ] You have an active **Google account** that is **already an admin in GAM** for network `<YOUR_NETWORK_CODE>` (River Five Global).
 - [ ] That same Google account can sign in at `console.cloud.google.com`.
 - [ ] You have a **secure way to share** the resulting JSON file with the dev team (1Password, Bitwarden Send, encrypted Signal — **not plain email or Slack**).
 
@@ -95,7 +95,7 @@ You may see a warning that the email "doesn't look like a typical Google account
 Send the dev team:
 
 1. The **JSON file** (via 1Password / Bitwarden Send).
-2. The **GAM Network Code** (confirm this is `23340025403` for River Five Global).
+2. The **GAM Network Code** (confirm this is `<YOUR_NETWORK_CODE>` for River Five Global).
 
 That's it. We'll do the rest.
 
@@ -121,7 +121,7 @@ If anything fails (most often: missing API enablement, or the SA email not added
 | "Google Ad Manager API has not been used" | Step 2 not done | Re-enable the API on the same GCP project. |
 | `PERMISSION_DENIED` on report queries | Step 5 not done, or wrong role | Add SA email to GAM with a role that includes "View reports". |
 | `invalid_grant` at token exchange | Wrong JSON, or JSON edited | Generate a new key in Step 4 and re-share. |
-| Network code mismatch | Reports pulled from wrong network | Confirm GAM network code is `23340025403` and not a sandbox. |
+| Network code mismatch | Reports pulled from wrong network | Confirm GAM network code is `<YOUR_NETWORK_CODE>` and not a sandbox. |
 
 ---
 

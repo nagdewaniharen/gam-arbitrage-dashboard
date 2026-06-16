@@ -26,7 +26,8 @@ const envSchema = z.object({
 
   INTERNAL_CRON_SECRET: z.string().min(16).default('dev_only_change_me_to_a_long_string'),
 
-  GAM_NETWORK_CODE: z.string().default('23340025403'),
+  // Required — read from .env or Secrets Manager. NEVER hardcoded.
+  GAM_NETWORK_CODE: z.string().min(6),
   GAM_SERVICE_ACCOUNT_JSON_PATH: z.string().optional(),
   GAM_REPORT_TIMEZONE: z.string().default('Asia/Kolkata'),
   GAM_BACKFILL_DAYS_ON_FIRST_RUN: z.coerce.number().int().positive().default(90),

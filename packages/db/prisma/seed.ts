@@ -9,7 +9,8 @@ import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const NETWORK_ID = '23340025403';
+// Read from env so the real network code never lives in source.
+const NETWORK_ID = process.env.GAM_NETWORK_CODE ?? 'DEMO_NETWORK';
 const DAYS = 30;
 
 const CAMPAIGNS = ['camp_01', 'camp_02', 'camp_03', 'camp_04', 'camp_05', 'camp_06'];

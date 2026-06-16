@@ -110,7 +110,7 @@ All read endpoints hit Postgres directly via Prisma raw SQL (typed). Aggregation
 
 - **Single source of truth**: `packages/db/prisma/schema.prisma`. SQL in PRD §8 is documentary.
 - **Upserts everywhere**: `gam_reports` has a 9-column unique key. Every cron and CSV upload is idempotent.
-- **`network_id` reserved**: today's data is single-tenant (`23340025403`), but every row carries it. Multi-tenant in the future requires no schema migration — only auth scope changes.
+- **`network_id` reserved**: today's data is single-tenant (`<YOUR_NETWORK_CODE>`), but every row carries it. Multi-tenant in the future requires no schema migration — only auth scope changes.
 - **Decimals**: `revenue` uses `Decimal(14,4)` to avoid float drift. App-layer `Number(...)` conversion is safe only because we cap at $1B per row.
 - **`fetched_at`**: every upsert refreshes this timestamp so we can identify rows refreshed in the last cron pull.
 
