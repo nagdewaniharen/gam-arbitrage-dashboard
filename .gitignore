@@ -22,6 +22,7 @@ secrets/
 **/service-account*.json
 **/gcp-*.json
 **/gam-*.json
+**/gam-user-refresh-token.json
 !packages/db/prisma/schema.prisma
 
 # Logs

@@ -36,32 +36,96 @@ interface Logger {
   error: (m: string, e?: unknown) => void;
 }
 
+/**
+ * Two auth paths, picked in priority order:
+ *
+ *   1. User OAuth refresh token  (written by `pnpm auth:gam`)
+ *      `secrets/gam-user-refresh-token.json`
+ *      → use when the dev's own Google account has GAM access
+ *
+ *   2. Service Account JSON
+ *      `GAM_SERVICE_ACCOUNT_JSON_PATH` or `GAM_SERVICE_ACCOUNT_JSON` env
+ *      → use when the SA email has been activated as a GAM user
+ *
+ * If the refresh token file is present, it wins. Otherwise we fall back to SA.
+ */
+const USER_TOKEN_PATH = path.resolve(process.cwd(), '../../secrets/gam-user-refresh-token.json');
+let cachedUserToken: { accessToken: string; expiresAt: number } | null = null;
+
+async function loadUserRefreshToken(): Promise<{ refresh_token: string; client_id: string } | null> {
+  try {
+    const buf = await fs.readFile(USER_TOKEN_PATH, 'utf-8');
+    const j = JSON.parse(buf) as { refresh_token: string; client_id: string };
+    if (!j.refresh_token || !j.client_id) return null;
+    return j;
+  } catch {
+    return null;
+  }
+}
+
+async function getUserAccessToken(log: Logger): Promise<string | null> {
+  const stored = await loadUserRefreshToken();
+  if (!stored) return null;
+  const secret = process.env.GAM_USER_OAUTH_CLIENT_SECRET;
+  if (!secret) {
+    log.warn('User refresh token present but GAM_USER_OAUTH_CLIENT_SECRET missing — skipping user-flow auth');
+    return null;
+  }
+  if (cachedUserToken && cachedUserToken.expiresAt > Date.now() + 60_000) {
+    return cachedUserToken.accessToken;
+  }
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: stored.client_id,
+      client_secret: secret,
+      refresh_token: stored.refresh_token,
+      grant_type: 'refresh_token',
+    }).toString(),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    log.warn(`User refresh token exchange failed: HTTP ${res.status} ${txt.slice(0, 200)}`);
+    return null;
+  }
+  const tok = (await res.json()) as { access_token: string; expires_in: number };
+  cachedUserToken = {
+    accessToken: tok.access_token,
+    expiresAt: Date.now() + tok.expires_in * 1000,
+  };
+  log.info('GAM: refreshed user OAuth access token');
+  return tok.access_token;
+}
+
 async function loadServiceAccount(): Promise<Record<string, unknown>> {
   if (process.env.GAM_SERVICE_ACCOUNT_JSON) {
     return JSON.parse(process.env.GAM_SERVICE_ACCOUNT_JSON) as Record<string, unknown>;
   }
   const p = env.GAM_SERVICE_ACCOUNT_JSON_PATH;
-  if (!p) throw new Error('Neither GAM_SERVICE_ACCOUNT_JSON nor GAM_SERVICE_ACCOUNT_JSON_PATH is set');
+  if (!p) throw new Error('Neither user OAuth token nor service account JSON is configured');
   const abs = path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
   const buf = await fs.readFile(abs, 'utf-8');
   return JSON.parse(buf) as Record<string, unknown>;
 }
 
-let cachedAuth: GoogleAuth | null = null;
-async function getAuth(): Promise<GoogleAuth> {
-  if (cachedAuth) return cachedAuth;
-  const credentials = await loadServiceAccount();
-  cachedAuth = new GoogleAuth({ credentials: credentials as never, scopes: [SCOPE] });
-  return cachedAuth;
-}
-
-async function getAccessToken(): Promise<string> {
-  const auth = await getAuth();
-  const client = await auth.getClient();
+let cachedSaAuth: GoogleAuth | null = null;
+async function getSaAccessToken(): Promise<string> {
+  if (!cachedSaAuth) {
+    const credentials = await loadServiceAccount();
+    cachedSaAuth = new GoogleAuth({ credentials: credentials as never, scopes: [SCOPE] });
+  }
+  const client = await cachedSaAuth.getClient();
   const tokenResp = await client.getAccessToken();
   const token = typeof tokenResp === 'string' ? tokenResp : tokenResp?.token;
-  if (!token) throw new Error('Failed to obtain GAM access token');
+  if (!token) throw new Error('Failed to obtain GAM access token from service account');
   return token;
+}
+
+async function getAccessToken(log: Logger): Promise<{ token: string; via: 'user' | 'service-account' }> {
+  const userTok = await getUserAccessToken(log);
+  if (userTok) return { token: userTok, via: 'user' };
+  return { token: await getSaAccessToken(), via: 'service-account' };
 }
 
 function xmlEscape(s: string): string {
@@ -94,7 +158,8 @@ async function soapCall(opts: {
   body: string;
   log: Logger;
 }): Promise<string> {
-  const accessToken = await getAccessToken();
+  const { token: accessToken, via } = await getAccessToken(opts.log);
+  opts.log.info(`GAM: SOAP ${opts.action} via ${via} token`);
   const envelope = buildEnvelope({
     networkCode: env.GAM_NETWORK_CODE,
     accessToken,
