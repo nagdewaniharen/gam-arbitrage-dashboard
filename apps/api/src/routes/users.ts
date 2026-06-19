@@ -19,6 +19,7 @@ export async function userRoutes(app: FastifyInstance) {
         isActive: u.isActive,
         lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
         createdAt: u.createdAt.toISOString(),
+        updateAt: u.updatedAt.toISOString(),
       })),
     );
   });

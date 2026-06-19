@@ -32,8 +32,8 @@ async function fetchMe(): Promise<MeResponse> {
  */
 export function UserMenu() {
   const [open, setOpen] = useState(false);
-  const q = useQuery({ queryKey: ['me'], queryFn: fetchMe, staleTime: 60_000 });
   const ssoOn = !!process.env.NEXT_PUBLIC_SSO_ENABLED;
+  const q = useQuery({ queryKey: ['me'], queryFn: fetchMe, staleTime: 60_000, enabled: ssoOn });
 
   // In Phase 1 mode (no SSO env), don't show anything.
   if (!ssoOn) return null;

@@ -66,7 +66,7 @@ importers:
         specifier: ^144.0.0
         version: 144.0.0
       jose:
-        specifier: ^5.9.6
+        specifier: ^5.10.0
         version: 5.10.0
       pino-pretty:
         specifier: ^11.2.2

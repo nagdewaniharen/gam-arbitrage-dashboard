@@ -26,7 +26,11 @@ export function Header({
   const [toast, setToast] = useState<string | null>(null);
   const refresh = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${BASE}/api/refresh`, { method: 'POST' });
+      const res = await fetch(`${BASE}/api/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ daysBack: 30 }),
+      });
       if (!res.ok) throw new Error(`Refresh failed (${res.status})`);
       return res.json();
     },
