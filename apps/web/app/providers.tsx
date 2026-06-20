@@ -1,10 +1,16 @@
 'use client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SessionProvider } from 'next-auth/react';
 import { useState } from 'react';
 
-const AUTH_ENABLED = !!process.env.NEXT_PUBLIC_SSO_ENABLED;
-
+/**
+ * Providers wraps the app tree.
+ *
+ * SSO is deferred (ADR-013 / ADR-014). When ready to re-enable, restore the
+ * NextAuth `SessionProvider` import — but ONLY behind a dynamic import, since
+ * importing `next-auth/react` at module-load currently breaks Next.js 15 build
+ * under NextAuth 5 beta (page routes silently fail to compile, only
+ * `_not-found` registers).
+ */
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(
     () =>
@@ -20,13 +26,5 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
 
-  // QueryClientProvider is always needed (dashboard data fetching).
-  // SessionProvider only mounts when auth/SSO is enabled — otherwise it
-  // calls /api/auth/session and throws ClientFetchError in Phase 1.
-  const tree = <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-
-  if (!AUTH_ENABLED) {
-    return tree;
-  }
-  return <SessionProvider>{tree}</SessionProvider>;
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
