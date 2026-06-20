@@ -153,28 +153,55 @@ export interface ParsedReportRow {
   matchRate: number;
 }
 
+/**
+ * Parse GAM_CUSTOM_KEY_IDS env var into a name → numeric-id map.
+ * Format: "campaign:19566476,source:19542339,headline:19542333,lander:19542345,image:19542366"
+ *
+ * Produced once by `pnpm --filter @gam/api gam:keys` (CLI in src/cli/gam-keys.ts).
+ */
+function parseCustomKeyIds(): { name: string; id: string }[] {
+  const raw = process.env.GAM_CUSTOM_KEY_IDS;
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((pair) => pair.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const [name, id] = pair.split(':');
+      return { name: (name ?? '').trim(), id: (id ?? '').trim() };
+    })
+    .filter((k) => k.name && k.id);
+}
+
 export async function runGamReport(opts: GamReportRunOptions, log: Logger): Promise<ParsedReportRow[]> {
   return retry(
     async () => {
       const { fromDate, toDate, timezone = env.GAM_REPORT_TIMEZONE } = opts;
-      // Metric set decided by ADR-016 (2026-06-20). PRD's LINE_ITEM_LEVEL_*
-      // variants don't exist on this network; using the regular AD_EXCHANGE_*
-      // family which IS confirmed working in the GAM metric picker.
+      const customKeys = parseCustomKeyIds();
+
+      // No explicit dimension needed when customDimensionKeyIds is set; GAM
+      // emits one column per key automatically.
+      const customDimsXml = '';
+      const customKeyIdsXml = customKeys
+        .map((k) => `<ns:customDimensionKeyIds>${xmlEscape(k.id)}</ns:customDimensionKeyIds>`)
+        .join('\n            ');
+
+      // GAM v202511 ReportQuery XSD requires this exact element order:
+      //   dimensions → adUnitView → columns → customDimensionKeyIds → startDate → endDate → ...
       const runBody = `<ns:runReportJob>
         <ns:reportJob>
           <ns:reportQuery>
             <ns:dimensions>DATE</ns:dimensions>
             <ns:dimensions>AD_UNIT_NAME</ns:dimensions>
-            <ns:dimensions>CUSTOM_TARGETING_VALUE_ID</ns:dimensions>
+            ${customDimsXml}
             <ns:adUnitView>TOP_LEVEL</ns:adUnitView>
             <ns:columns>AD_EXCHANGE_IMPRESSIONS</ns:columns>
             <ns:columns>AD_EXCHANGE_CLICKS</ns:columns>
             <ns:columns>AD_EXCHANGE_REVENUE</ns:columns>
             <ns:columns>AD_EXCHANGE_AVERAGE_ECPM</ns:columns>
-            <ns:columns>AD_EXCHANGE_TOTAL_REQUESTS</ns:columns>
             <ns:columns>AD_EXCHANGE_RESPONSES_SERVED</ns:columns>
-            <ns:columns>AD_EXCHANGE_MATCH_RATE</ns:columns>
             <ns:columns>AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS</ns:columns>
+            ${customKeyIdsXml}
             <ns:startDate>
               <ns:year>${fromDate.getUTCFullYear()}</ns:year>
               <ns:month>${fromDate.getUTCMonth() + 1}</ns:month>
@@ -190,13 +217,15 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
           </ns:reportQuery>
         </ns:reportJob>
       </ns:runReportJob>`;
-      log.info(`GAM: submitting ReportJob (${fromDate.toISOString().slice(0, 10)} -> ${toDate.toISOString().slice(0, 10)}, tz=${timezone})`);
+      log.info(
+        `GAM: submitting ReportJob (${fromDate.toISOString().slice(0, 10)} -> ${toDate.toISOString().slice(0, 10)}, tz=${timezone}, customKeys=${customKeys.length})`,
+      );
       const runXml = await soapCall({ action: 'runReportJob', body: runBody, log });
       const jobId = extractTag(runXml, 'id') ?? extractTag(runXml, 'rval');
       if (!jobId) throw new Error('Could not parse ReportJob id from GAM response');
       log.info(`GAM: job ${jobId} submitted; polling...`);
       const csv = await pollAndDownload(jobId, log);
-      const rows = await parseGamCsv(csv);
+      const rows = await parseGamCsv(csv, customKeys);
       log.info(`GAM: parsed ${rows.length} rows`);
       return rows;
     },
@@ -246,7 +275,7 @@ async function pollAndDownload(jobId: string, log: Logger): Promise<string> {
   throw new Error(`GAM ReportJob ${jobId} timed out after ${TIMEOUT_MS / 1000}s`);
 }
 
-async function parseGamCsv(csv: string): Promise<ParsedReportRow[]> {
+async function parseGamCsv(csv: string, customKeys: { name: string; id: string }[] = []): Promise<ParsedReportRow[]> {
   return new Promise((resolve, reject) => {
     parse(
       csv,
@@ -259,6 +288,19 @@ async function parseGamCsv(csv: string): Promise<ParsedReportRow[]> {
       (err, rows: Record<string, string>[]) => {
         if (err) return reject(err);
         const out: ParsedReportRow[] = [];
+        // When customDimensionKeyIds is set, GAM emits per-key columns like
+        // `Dimension.CUSTOM_TARGETING_VALUE_ID (Campaign)` → normalised to
+        // `dimension_custom_targeting_value_id_campaign`.
+        const customColumnByName = new Map<string, string>();
+        for (const k of customKeys) {
+          customColumnByName.set(k.name, `dimension_custom_targeting_value_id_${k.name.toLowerCase()}`);
+        }
+        const get = (r: Record<string, string>, ourName: string): string => {
+          const candidate = customColumnByName.get(ourName);
+          if (candidate && r[candidate]) return r[candidate]!;
+          return r[`dimension_${ourName}`] ?? r[ourName] ?? '';
+        };
+
         for (const r of rows) {
           const dateStr = r['dimension_date'] ?? r['date'] ?? '';
           if (!dateStr) continue;
@@ -270,28 +312,32 @@ async function parseGamCsv(csv: string): Promise<ParsedReportRow[]> {
           out.push({
             date,
             adUnit: r['dimension_ad_unit_name'] ?? r['ad_unit_name'] ?? r['ad_unit'] ?? '',
-            campaign: r['dimension_campaign'] ?? r['campaign'] ?? '',
-            source: r['dimension_source'] ?? r['source'] ?? '',
-            headline: r['dimension_headline'] ?? r['headline'] ?? '',
-            lander: r['dimension_lander'] ?? r['lander'] ?? '',
-            image: r['dimension_image'] ?? r['image'] ?? '',
+            campaign: get(r, 'campaign'),
+            source: get(r, 'source'),
+            headline: get(r, 'headline'),
+            lander: get(r, 'lander'),
+            image: get(r, 'image'),
             page: r['dimension_page'] ?? r['page'] ?? '',
             impressions: BigInt(Math.floor(Number(
+              r['column_ad_server_impressions'] ??
               r['column_ad_exchange_impressions'] ??
               r['column_ad_exchange_line_item_level_impressions'] ??
               r['impressions'] ?? 0,
             ))),
             clicks: BigInt(Math.floor(Number(
+              r['column_ad_server_clicks'] ??
               r['column_ad_exchange_clicks'] ??
               r['column_ad_exchange_line_item_level_clicks'] ??
               r['clicks'] ?? 0,
             ))),
             revenue: Number(
+              r['column_ad_server_cpm_and_cpc_revenue'] ??
               r['column_ad_exchange_revenue'] ??
               r['column_ad_exchange_line_item_level_revenue'] ??
               r['revenue'] ?? 0,
             ) / 1_000_000,
             ecpm: Number(
+              r['column_ad_server_average_ecpm'] ??
               r['column_ad_exchange_average_ecpm'] ??
               r['column_ad_exchange_line_item_level_average_ecpm'] ??
               r['ecpm'] ?? 0,

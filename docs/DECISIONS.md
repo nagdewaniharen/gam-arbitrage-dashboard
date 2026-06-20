@@ -194,3 +194,19 @@ Each ADR is a small, append-only record. Format:
   - RPV value is now mathematically correct ("$ per visit") instead of `revenue / impressions` (which equals eCPM/1000).
   - If a future funnel template adds more ad slots, change the env var; no code deploy.
   - Eventually replaceable with a GA4-driven real-visits integration (would supersede this ADR).
+
+## ADR-018 — Custom-targeting breakdown (campaign/source/headline/lander/image) deferred
+- **Date**: 2026-06-20
+- **Status**: Open — needs GAM admin investigation
+- **Context**: PRD §7.2 requires the dashboard to show revenue broken down by 5 custom targeting keys: campaign, source, headline, lander, image. We verified that the keys are configured in GAM Admin → Inventory → Key-values (CLI `pnpm --filter @gam/api gam:keys` lists IDs 19566476 / 19542339 / 19542333 / 19542345 / 19542366), and they're set via `googletag.pubads().setTargeting()` on jobprivet.com funnel pages.
+- **Decision**: For now, the GAM SOAP report pulls `DATE + AD_UNIT_NAME` only — no custom dimensions. Real numbers flow daily but campaign/source/headline/lander/image columns in `gam_reports` stay empty. The dashboard's breakdown sections render with empty rows.
+- **Why**: Every attempt to combine `customDimensionKeyIds` with any combination of metrics and dimensions returns `ReportError.INVALID_CUSTOM_CRITERIA_DIMENSION`. Tried:
+  - AD_EXCHANGE_* metrics + `CUSTOM_TARGETING_VALUE_ID` dimension + customDimensionKeyIds → INVALID_CUSTOM_CRITERIA_DIMENSION
+  - AD_EXCHANGE_* metrics + `CUSTOM_CRITERIA` dimension + customDimensionKeyIds → same
+  - AD_EXCHANGE_* metrics + no dimension + customDimensionKeyIds → same
+  - AD_SERVER_* metrics + no dimension + customDimensionKeyIds → same
+- **Consequences**:
+  - Aggregate KPIs (revenue, impressions, eCPM, clicks, RPV) work today against real data.
+  - Per-campaign / per-source analysis must wait until either (a) GAM API access settings allow custom-targeting reporting on this network, or (b) we find the right combination of dimensions/metrics/customDimensionKeyIds for v202511. Likely candidates to try next: SAVED_QUERY / dimensionAttributes / statement-filter approach.
+  - `pnpm --filter @gam/api gam:keys` CLI is kept (it works) so the moment we unblock this, we have the IDs ready.
+  - `GAM_CUSTOM_KEY_IDS` env var is documented in `.env.example` for forward compatibility.
