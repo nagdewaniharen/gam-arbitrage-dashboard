@@ -28,10 +28,14 @@ const envSchema = z.object({
 
   // Required — read from .env or Secrets Manager. NEVER hardcoded.
   GAM_NETWORK_CODE: z.string().min(6),
+  // OAuth User Flow (alternative to service account — used when SA is blocked)
+  GAM_USER_OAUTH_CLIENT_ID: z.string().optional(),
+  GAM_USER_OAUTH_CLIENT_SECRET: z.string().optional(),
   GAM_SERVICE_ACCOUNT_JSON_PATH: z.string().optional(),
   GAM_REPORT_TIMEZONE: z.string().default('Asia/Kolkata'),
   GAM_BACKFILL_DAYS_ON_FIRST_RUN: z.coerce.number().int().positive().default(90),
   GAM_INCREMENTAL_DAYS_PER_RUN: z.coerce.number().int().positive().default(7),
+  GAM_API_VERSION: z.string().optional(),
 
   MGID_API_KEY: z.string().optional(),
   MGID_API_BASE_URL: z.string().url().default('https://api.mgid.com/v1'),
