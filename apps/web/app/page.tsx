@@ -124,7 +124,7 @@ export default function DashboardPage() {
         <KpiCard
           label="RPV"
           value={s ? `$${rpv.toFixed(4)}` : '—'}
-          sub="Revenue / Impression"
+          sub={`Revenue / Visit (×${AVG_ADS_PER_PAGE} ads/page)`}
           accent="revenue"
           loading={stats.isLoading}
         />

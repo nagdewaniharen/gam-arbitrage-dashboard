@@ -179,8 +179,15 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       const { fromDate, toDate, timezone = env.GAM_REPORT_TIMEZONE } = opts;
       const customKeys = parseCustomKeyIds();
 
-      // No explicit dimension needed when customDimensionKeyIds is set; GAM
-      // emits one column per key automatically.
+      // Custom-targeting reporting is blocked at the GAM API level on this
+      // network (ADR-018). Every combination tried returns
+      // INVALID_CUSTOM_CRITERIA_DIMENSION. Keep customDimensionKeyIds support
+      // wired but emit nothing until the GAM admin enables custom-targeting
+      // reporting access — at that point uncommenting the line below should
+      // make the breakdowns light up.
+      // const customDimsXml = customKeys.length
+      //   ? '<ns:dimensions>CUSTOM_TARGETING_VALUE_ID</ns:dimensions>'
+      //   : '';
       const customDimsXml = '';
       const customKeyIdsXml = customKeys
         .map((k) => `<ns:customDimensionKeyIds>${xmlEscape(k.id)}</ns:customDimensionKeyIds>`)
