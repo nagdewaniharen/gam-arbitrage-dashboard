@@ -10,7 +10,11 @@ import type {
   TrendResponse,
 } from '@gam/types';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+// In production / when accessed from a non-local host, we proxy API calls
+// through the Next.js server via `/api-proxy/*` (configured in next.config.mjs).
+// `process.env.NEXT_PUBLIC_API_URL` is only used in local dev (set to
+// http://localhost:4000 in .env). Empty string → same-origin relative URLs.
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { cache: 'no-store' });

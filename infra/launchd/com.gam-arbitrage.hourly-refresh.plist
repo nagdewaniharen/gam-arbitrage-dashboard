@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gam-arbitrage.hourly-refresh</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-l</string>
+    <string>-c</string>
+    <!-- Use a login shell so PNPM_HOME / PATH inherit from .zshrc -->
+    <string>cd /Users/chandankumar/Desktop/GAM_Arbitrage_Reporting_Dashboard &amp;&amp; export PNPM_HOME=&quot;$HOME/Library/pnpm&quot; &amp;&amp; export PATH=&quot;$PNPM_HOME:$PATH&quot; &amp;&amp; pnpm --filter @gam/api backfill --days 1 &gt;&gt; /tmp/gam-hourly-refresh.log 2&gt;&amp;1</string>
+  </array>
+
+  <!-- Run every hour on the hour -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <!-- Also run once immediately when loaded -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/gam-hourly-refresh.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/gam-hourly-refresh.stderr.log</string>
+</dict>
+</plist>

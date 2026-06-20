@@ -92,6 +92,12 @@ export function BreakdownTable({
           ))}
         </select>
       </div>
+      {['campaign', 'source', 'headline', 'lander', 'image'].includes(dim) ? (
+        <div className="mb-3 text-[11px] text-[--color-text-muted] bg-[--color-surface-2] rounded px-2.5 py-1.5">
+          GAM custom-targeting reporting access pending — values show as{' '}
+          <code className="text-[--color-text-dim]">(empty)</code> until enabled. See ADR-018.
+        </div>
+      ) : null}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-[--color-text-muted] text-[10px] font-medium uppercase tracking-[0.1em]">
@@ -115,7 +121,16 @@ export function BreakdownTable({
             ) : sorted.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-8 text-center text-sm text-[--color-text-muted]">
-                  No data
+                  {['campaign', 'source', 'headline', 'lander', 'image'].includes(dim) ? (
+                    <span>
+                      Waiting on GAM custom-targeting reporting access.{' '}
+                      <span className="text-[--color-text-dim]">
+                        Keys are configured; once API permission is enabled, this fills automatically.
+                      </span>
+                    </span>
+                  ) : (
+                    'No data for this period'
+                  )}
                 </td>
               </tr>
             ) : (

@@ -149,7 +149,18 @@ export function CrossAnalysis({
               ) : filtered.length === 0 ? (
                 <tr className="border-t border-[--color-border]">
                   <td colSpan={6} className="py-8 text-center text-sm text-[--color-text-muted]">
-                    No combinations match
+                    {(['campaign', 'source', 'headline', 'lander', 'image'] as const).some((d) =>
+                      [dim1, dim2].includes(d),
+                    ) ? (
+                      <span>
+                        Waiting on GAM custom-targeting reporting access.{' '}
+                        <span className="text-[--color-text-dim]">
+                          Once enabled, this cross-dimension view fills automatically.
+                        </span>
+                      </span>
+                    ) : (
+                      'No combinations match'
+                    )}
                   </td>
                 </tr>
               ) : (

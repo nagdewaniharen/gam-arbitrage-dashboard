@@ -66,14 +66,15 @@ export default function DashboardPage() {
   const s = stats.data;
   const dbEmpty = status.data?.totalRows === 0;
 
-  // RPV — Revenue Per Visit. Per PRD §9.3.1:
+  // RPV — Revenue Per Visit. Per PRD §9.3.1 (literal form):
   //   RPV = revenue / (impressions / avg_ads_per_page)
-  // avg_ads_per_page is operational config (see ADR-017). Default = 2 (verified
-  // by counting defineSlot + defineOutOfPageSlot in jobprivet funnel source).
+  // avg_ads_per_page is operational config (see ADR-017). Default = 2
+  // (verified by counting defineSlot + defineOutOfPageSlot in jobprivet
+  // funnel source).
   const AVG_ADS_PER_PAGE = Number(process.env.NEXT_PUBLIC_AVG_ADS_PER_PAGE ?? 2);
   const rpv =
-    s && s.totalImpressions > 0
-      ? (s.totalRevenue * AVG_ADS_PER_PAGE) / s.totalImpressions
+    s && s.totalImpressions > 0 && AVG_ADS_PER_PAGE > 0
+      ? s.totalRevenue / (s.totalImpressions / AVG_ADS_PER_PAGE)
       : 0;
 
   return (
@@ -124,7 +125,7 @@ export default function DashboardPage() {
         <KpiCard
           label="RPV"
           value={s ? `$${rpv.toFixed(4)}` : '—'}
-          sub={`Revenue / Visit (×${AVG_ADS_PER_PAGE} ads/page)`}
+          sub="Revenue Per Visit"
           accent="revenue"
           loading={stats.isLoading}
         />

@@ -94,7 +94,16 @@ export function Performers({
           ) : rows.length === 0 ? (
             <tr>
               <td colSpan={5} className="py-8 text-center text-sm text-[--color-text-muted]">
-                No data — try lowering min impressions
+                {['campaign', 'source', 'headline', 'lander', 'image'].includes(by) ? (
+                  <span>
+                    Waiting on GAM custom-targeting reporting access.{' '}
+                    <span className="text-[--color-text-dim]">
+                      Will fill automatically once enabled.
+                    </span>
+                  </span>
+                ) : (
+                  'No data — try lowering min impressions'
+                )}
               </td>
             </tr>
           ) : (
