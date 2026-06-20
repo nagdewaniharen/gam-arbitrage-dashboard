@@ -37,6 +37,10 @@ const envSchema = z.object({
   GAM_INCREMENTAL_DAYS_PER_RUN: z.coerce.number().int().positive().default(7),
   GAM_API_VERSION: z.string().optional(),
 
+  // RPV (Revenue Per Visit) — see ADR-017.
+  // Average ad slots per funnel page. Used to compute RPV from impressions.
+  AVG_ADS_PER_PAGE: z.coerce.number().positive().default(2),
+
   MGID_API_KEY: z.string().optional(),
   MGID_API_BASE_URL: z.string().url().default('https://api.mgid.com/v1'),
 

@@ -66,9 +66,15 @@ export default function DashboardPage() {
   const s = stats.data;
   const dbEmpty = status.data?.totalRows === 0;
 
-  // RPV = revenue per impression (closest proxy to "revenue per page visit"
-  // with our data). Real RPV would require GA / page-view tracking.
-  const rpv = s && s.totalImpressions > 0 ? s.totalRevenue / s.totalImpressions : 0;
+  // RPV — Revenue Per Visit. Per PRD §9.3.1:
+  //   RPV = revenue / (impressions / avg_ads_per_page)
+  // avg_ads_per_page is operational config (see ADR-017). Default = 2 (verified
+  // by counting defineSlot + defineOutOfPageSlot in jobprivet funnel source).
+  const AVG_ADS_PER_PAGE = Number(process.env.NEXT_PUBLIC_AVG_ADS_PER_PAGE ?? 2);
+  const rpv =
+    s && s.totalImpressions > 0
+      ? (s.totalRevenue * AVG_ADS_PER_PAGE) / s.totalImpressions
+      : 0;
 
   return (
     <main className="min-h-screen px-4 py-5 md:px-6 md:py-6 max-w-[1480px] mx-auto">

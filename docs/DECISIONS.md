@@ -165,3 +165,32 @@ Each ADR is a small, append-only record. Format:
 - **Consequences**:
   - Cold-clone setup requires copying `.env.example → .env` and filling in the real code (already documented in README).
   - Outsourced devs can be onboarded with a DEMO_NETWORK code for staging without exposing the prod one.
+
+## ADR-016 — Substitute PRD's missing AD_EXCHANGE_LINE_ITEM_LEVEL_* metrics with the regular AD_EXCHANGE_* family
+- **Date**: 2026-06-20
+- **Status**: Accepted
+- **Context**: PRD §7.1 / §8.3 specified `AD_EXCHANGE_LINE_ITEM_LEVEL_REQUESTS`, `..._MATCH_RATE`, `..._IMPRESSIONS`, `..._CLICKS`, `..._REVENUE`, `..._AVERAGE_ECPM`, `..._PERCENT_VIEWABLE_IMPRESSIONS`. **Verified in the GAM metric picker** that these line-item-level variants do NOT exist on River Five Global because the network doesn't use AdX line items (all monetization runs through direct campaigns / header bidding). API returns empty CSV; UI picker doesn't list them.
+- **Decision**: Use the regular `AD_EXCHANGE_*` family instead, all confirmed working with real data on our network:
+  - `AD_EXCHANGE_IMPRESSIONS`
+  - `AD_EXCHANGE_CLICKS`
+  - `AD_EXCHANGE_REVENUE`
+  - `AD_EXCHANGE_AVERAGE_ECPM`
+  - `AD_EXCHANGE_TOTAL_REQUESTS`
+  - `AD_EXCHANGE_RESPONSES_SERVED`
+  - `AD_EXCHANGE_MATCH_RATE` (native — no need to compute from REQUESTS/RESPONSES_SERVED)
+  - `AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS`
+- **Consequences**:
+  - Match rate field gains real values (was always 0 under PRD's metric choice).
+  - Total requests + responses served exposed for fill-rate analysis (better than what PRD asked for).
+  - Parser accepts both new and legacy column names so existing CSV uploads keep working.
+  - Substitution communicated to PRD owner (Heren) before merging.
+
+## ADR-017 — RPV formula uses configurable AVG_ADS_PER_PAGE (default 2)
+- **Date**: 2026-06-20
+- **Status**: Accepted
+- **Context**: PRD §9.3.1 defines `RPV = revenue / (impressions / avg_ads_per_page)`. The formula is specified but `avg_ads_per_page` is operational data — depends on funnel design, not GAM.
+- **Decision**: Make `AVG_ADS_PER_PAGE` an env var (default `2`). Web reads `NEXT_PUBLIC_AVG_ADS_PER_PAGE`. Verified on `jobprivet.com/funnel/` source: 1× `defineSlot` (site_top banner) + 1× `defineOutOfPageSlot` (site_rewarded) = 2 ad slots per typical funnel page.
+- **Consequences**:
+  - RPV value is now mathematically correct ("$ per visit") instead of `revenue / impressions` (which equals eCPM/1000).
+  - If a future funnel template adds more ad slots, change the env var; no code deploy.
+  - Eventually replaceable with a GA4-driven real-visits integration (would supersede this ADR).

@@ -1,12 +1,29 @@
 /**
- * Google Ad Manager Reporting API client — SOAP, OAuth, Ad Exchange columns.
+ * Google Ad Manager Reporting API client — SOAP, OAuth user-flow, AD_EXCHANGE_* columns.
  *
- * This network (River Five Global) serves PROGRAMMATIC / Ad Exchange traffic,
- * so the report uses AD_EXCHANGE_LINE_ITEM_LEVEL_* columns (not the
- * TOTAL_LINE_ITEM_LEVEL_* ones, which return 0 rows for programmatic-only data).
+ * Architecture (originally by Diksha, 2026-06-19):
+ *   - Uses `googleapis` OAuth2 client (instead of a hand-rolled GoogleAuth wrapper)
+ *   - SOAP envelope is constructed inline; CSV download is gzip-aware
+ *
+ * Metric set (ADR-016, 2026-06-20):
+ *   - PRD §7.1 / §8.3 specified `AD_EXCHANGE_LINE_ITEM_LEVEL_*` columns.
+ *     Verified in the GAM metric picker that those do NOT exist on River Five Global
+ *     (no AdX line items configured). Using the regular `AD_EXCHANGE_*` family.
+ *
+ * Dimensions:
+ *   - DATE + AD_UNIT_NAME + CUSTOM_TARGETING_VALUE_ID — needed for the dashboard's
+ *     breakdown tables (campaign × source × headline × lander × image).
+ *
+ * Auth env vars (loaded from .env):
+ *   - GAM_USER_OAUTH_CLIENT_ID
+ *   - GAM_USER_OAUTH_CLIENT_SECRET
+ *   Refresh token is loaded from secrets/gam-user-refresh-token.json (gitignored),
+ *   produced by the `pnpm --filter @gam/api auth:gam` CLI.
  */
 import { google } from 'googleapis';
 import zlib from 'node:zlib';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { parse } from 'csv-parse';
 import { env } from '../config/env.js';
 import { retry } from '../lib/retry.js';
@@ -14,6 +31,7 @@ import { retry } from '../lib/retry.js';
 const GAM_API_VERSION = process.env.GAM_API_VERSION ?? 'v202511';
 const REPORT_SERVICE_URL = `https://ads.google.com/apis/ads/publisher/${GAM_API_VERSION}/ReportService`;
 const APP_NAME = 'GAM Arbitrage Dashboard';
+const REFRESH_TOKEN_PATH = path.resolve(process.cwd(), '../../secrets/gam-user-refresh-token.json');
 
 interface Logger {
   info: (m: string, e?: unknown) => void;
@@ -23,21 +41,39 @@ interface Logger {
 
 /* ----------------------------- AUTH (OAuth2) ----------------------------- */
 let cachedOAuth: InstanceType<typeof google.auth.OAuth2> | null = null;
-function getOAuthClient() {
-  if (cachedOAuth) return cachedOAuth;
-  const clientId = process.env.GAM_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GAM_OAUTH_CLIENT_SECRET;
-  const refreshToken = process.env.GAM_OAUTH_REFRESH_TOKEN;
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('GAM OAuth not configured. Set GAM_OAUTH_CLIENT_ID, GAM_OAUTH_CLIENT_SECRET, GAM_OAUTH_REFRESH_TOKEN.');
+
+async function loadRefreshToken(): Promise<string> {
+  // Prefer the file produced by the auth:gam CLI; fall back to env var for prod.
+  if (process.env.GAM_USER_OAUTH_REFRESH_TOKEN) return process.env.GAM_USER_OAUTH_REFRESH_TOKEN;
+  try {
+    const raw = await fs.readFile(REFRESH_TOKEN_PATH, 'utf-8');
+    const json = JSON.parse(raw) as { refresh_token?: string };
+    if (!json.refresh_token) throw new Error('refresh_token missing in token file');
+    return json.refresh_token;
+  } catch (e) {
+    throw new Error(
+      `GAM OAuth refresh token not available. Either set GAM_USER_OAUTH_REFRESH_TOKEN or run ` +
+        `\`pnpm --filter @gam/api auth:gam\` to produce ${REFRESH_TOKEN_PATH}. Original: ${(e as Error).message}`,
+    );
   }
+}
+
+async function getOAuthClient() {
+  if (cachedOAuth) return cachedOAuth;
+  const clientId = process.env.GAM_USER_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GAM_USER_OAUTH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error('GAM OAuth not configured. Set GAM_USER_OAUTH_CLIENT_ID and GAM_USER_OAUTH_CLIENT_SECRET in .env.');
+  }
+  const refreshToken = await loadRefreshToken();
   const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
   oauth2.setCredentials({ refresh_token: refreshToken });
   cachedOAuth = oauth2;
   return oauth2;
 }
+
 async function getAccessToken(): Promise<string> {
-  const { token } = await getOAuthClient().getAccessToken();
+  const { token } = await (await getOAuthClient()).getAccessToken();
   if (!token) throw new Error('Failed to obtain GAM access token from refresh token');
   return token;
 }
@@ -46,6 +82,7 @@ async function getAccessToken(): Promise<string> {
 function xmlEscape(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
 function buildEnvelope(opts: { networkCode: string; body: string }): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
@@ -61,6 +98,7 @@ function buildEnvelope(opts: { networkCode: string; body: string }): string {
   </soap:Body>
 </soap:Envelope>`;
 }
+
 async function soapCall(opts: { action: string; body: string; log: Logger }): Promise<string> {
   const accessToken = await getAccessToken();
   const envelope = buildEnvelope({ networkCode: env.GAM_NETWORK_CODE, body: opts.body });
@@ -86,33 +124,57 @@ async function soapCall(opts: { action: string; body: string; log: Logger }): Pr
   }
   return text;
 }
+
 function extractTag(xml: string, tag: string): string | undefined {
   const m = new RegExp(`<(?:[a-z]+:)?${tag}>([^<]+)</(?:[a-z]+:)?${tag}>`).exec(xml);
   return m?.[1];
 }
 
-export interface GamReportRunOptions { fromDate: Date; toDate: Date; timezone?: string; }
+export interface GamReportRunOptions {
+  fromDate: Date;
+  toDate: Date;
+  timezone?: string;
+}
+
 export interface ParsedReportRow {
-  date: Date; adUnit: string; campaign: string; source: string; headline: string;
-  lander: string; image: string; page: string; impressions: bigint; clicks: bigint;
-  revenue: number; ecpm: number; viewability: number; matchRate: number;
+  date: Date;
+  adUnit: string;
+  campaign: string;
+  source: string;
+  headline: string;
+  lander: string;
+  image: string;
+  page: string;
+  impressions: bigint;
+  clicks: bigint;
+  revenue: number;
+  ecpm: number;
+  viewability: number;
+  matchRate: number;
 }
 
 export async function runGamReport(opts: GamReportRunOptions, log: Logger): Promise<ParsedReportRow[]> {
   return retry(
     async () => {
       const { fromDate, toDate, timezone = env.GAM_REPORT_TIMEZONE } = opts;
-      // Ad Exchange (programmatic) columns — match this network's data.
+      // Metric set decided by ADR-016 (2026-06-20). PRD's LINE_ITEM_LEVEL_*
+      // variants don't exist on this network; using the regular AD_EXCHANGE_*
+      // family which IS confirmed working in the GAM metric picker.
       const runBody = `<ns:runReportJob>
         <ns:reportJob>
           <ns:reportQuery>
             <ns:dimensions>DATE</ns:dimensions>
-            <ns:columns>AD_EXCHANGE_LINE_ITEM_LEVEL_IMPRESSIONS</ns:columns>
-            <ns:columns>AD_EXCHANGE_LINE_ITEM_LEVEL_CLICKS</ns:columns>
-            <ns:columns>AD_EXCHANGE_LINE_ITEM_LEVEL_REVENUE</ns:columns>
-            <ns:columns>AD_EXCHANGE_LINE_ITEM_LEVEL_AVERAGE_ECPM</ns:columns>
-            <ns:columns>AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE</ns:columns>
+            <ns:dimensions>AD_UNIT_NAME</ns:dimensions>
+            <ns:dimensions>CUSTOM_TARGETING_VALUE_ID</ns:dimensions>
+            <ns:adUnitView>TOP_LEVEL</ns:adUnitView>
+            <ns:columns>AD_EXCHANGE_IMPRESSIONS</ns:columns>
+            <ns:columns>AD_EXCHANGE_CLICKS</ns:columns>
+            <ns:columns>AD_EXCHANGE_REVENUE</ns:columns>
+            <ns:columns>AD_EXCHANGE_AVERAGE_ECPM</ns:columns>
+            <ns:columns>AD_EXCHANGE_TOTAL_REQUESTS</ns:columns>
+            <ns:columns>AD_EXCHANGE_RESPONSES_SERVED</ns:columns>
             <ns:columns>AD_EXCHANGE_MATCH_RATE</ns:columns>
+            <ns:columns>AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS</ns:columns>
             <ns:startDate>
               <ns:year>${fromDate.getUTCFullYear()}</ns:year>
               <ns:month>${fromDate.getUTCMonth() + 1}</ns:month>
@@ -124,6 +186,7 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
               <ns:day>${toDate.getUTCDate()}</ns:day>
             </ns:endDate>
             <ns:dateRangeType>CUSTOM_DATE</ns:dateRangeType>
+            <ns:timeZoneType>PUBLISHER</ns:timeZoneType>
           </ns:reportQuery>
         </ns:reportJob>
       </ns:runReportJob>`;
@@ -138,7 +201,9 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       return rows;
     },
     {
-      maxAttempts: 3, baseDelayMs: 2_000, maxDelayMs: 30_000,
+      maxAttempts: 3,
+      baseDelayMs: 2_000,
+      maxDelayMs: 30_000,
       onRetry: (e, attempt, delay) => log.warn(`GAM run failed (attempt ${attempt}), retrying in ${delay}ms`, e),
     },
   );
@@ -169,7 +234,11 @@ async function pollAndDownload(jobId: string, log: Logger): Promise<string> {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`GAM CSV download failed: HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
-      try { return zlib.gunzipSync(buf).toString('utf-8'); } catch { return buf.toString('utf-8'); }
+      try {
+        return zlib.gunzipSync(buf).toString('utf-8');
+      } catch {
+        return buf.toString('utf-8');
+      }
     }
     if (status === 'FAILED') throw new Error(`GAM ReportJob ${jobId} FAILED`);
     delay = Math.min(delay * 1.5, 20_000);
@@ -184,7 +253,8 @@ async function parseGamCsv(csv: string): Promise<ParsedReportRow[]> {
       {
         columns: (header: string[]) =>
           header.map((h) => h.trim().toLowerCase().replace(/[.\s]+/g, '_').replace(/[^a-z0-9_]/g, '')),
-        skip_empty_lines: true, trim: true,
+        skip_empty_lines: true,
+        trim: true,
       },
       (err, rows: Record<string, string>[]) => {
         if (err) return reject(err);
@@ -194,23 +264,49 @@ async function parseGamCsv(csv: string): Promise<ParsedReportRow[]> {
           if (!dateStr) continue;
           const date = new Date(dateStr);
           if (isNaN(date.getTime())) continue;
-          // Ad Exchange revenue/eCPM are in micros (1/1,000,000 currency unit).
+          // Column-name mapping decided by ADR-016. We accept both new (AD_EXCHANGE_*)
+          // and legacy (LINE_ITEM_LEVEL_*) header names so existing CSV uploads work.
+          // Revenue and eCPM are micros (1/1,000,000 of report currency).
           out.push({
             date,
             adUnit: r['dimension_ad_unit_name'] ?? r['ad_unit_name'] ?? r['ad_unit'] ?? '',
-            campaign: '', source: '', headline: '', lander: '', image: '', page: '',
+            campaign: r['dimension_campaign'] ?? r['campaign'] ?? '',
+            source: r['dimension_source'] ?? r['source'] ?? '',
+            headline: r['dimension_headline'] ?? r['headline'] ?? '',
+            lander: r['dimension_lander'] ?? r['lander'] ?? '',
+            image: r['dimension_image'] ?? r['image'] ?? '',
+            page: r['dimension_page'] ?? r['page'] ?? '',
             impressions: BigInt(Math.floor(Number(
-              r['column_ad_exchange_line_item_level_impressions'] ?? r['impressions'] ?? 0))),
+              r['column_ad_exchange_impressions'] ??
+              r['column_ad_exchange_line_item_level_impressions'] ??
+              r['impressions'] ?? 0,
+            ))),
             clicks: BigInt(Math.floor(Number(
-              r['column_ad_exchange_line_item_level_clicks'] ?? r['clicks'] ?? 0))),
+              r['column_ad_exchange_clicks'] ??
+              r['column_ad_exchange_line_item_level_clicks'] ??
+              r['clicks'] ?? 0,
+            ))),
             revenue: Number(
-              r['column_ad_exchange_line_item_level_revenue'] ?? r['revenue'] ?? 0) / 1_000_000,
+              r['column_ad_exchange_revenue'] ??
+              r['column_ad_exchange_line_item_level_revenue'] ??
+              r['revenue'] ?? 0,
+            ) / 1_000_000,
             ecpm: Number(
-              r['column_ad_exchange_line_item_level_average_ecpm'] ?? r['ecpm'] ?? 0) / 1_000_000,
+              r['column_ad_exchange_average_ecpm'] ??
+              r['column_ad_exchange_line_item_level_average_ecpm'] ??
+              r['ecpm'] ?? 0,
+            ) / 1_000_000,
             viewability: Number(
-              r['column_ad_exchange_active_view_viewable_impressions_rate'] ?? 0),
+              r['column_ad_exchange_active_view_percent_viewable_impressions'] ??
+              r['column_ad_exchange_active_view_viewable_impressions_rate'] ??
+              r['column_ad_exchange_line_item_level_percent_viewable_impressions'] ??
+              r['viewability'] ?? 0,
+            ) / 100,
             matchRate: Number(
-              r['column_ad_exchange_match_rate'] ?? 0),
+              r['column_ad_exchange_match_rate'] ??
+              r['column_ad_exchange_line_item_level_match_rate'] ??
+              r['match_rate'] ?? 0,
+            ) / 100,
           });
         }
         resolve(out);
