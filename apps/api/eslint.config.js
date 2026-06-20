@@ -1,5 +1,6 @@
 export default [
   {
+    files: ['src/**/*.ts', 'src/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
