@@ -6,6 +6,7 @@
  *   node --env-file=../.env --experimental-strip-types get-refresh-token.ts
  * Log in with a GAM-enabled account, approve, copy the printed token into .env.
  */
+// @ts-nocheck
 import { google } from 'googleapis';
 import http from 'node:http';
 
