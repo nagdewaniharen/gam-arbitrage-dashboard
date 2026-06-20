@@ -111,6 +111,8 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
             <ns:columns>AD_EXCHANGE_LINE_ITEM_LEVEL_CLICKS</ns:columns>
             <ns:columns>AD_EXCHANGE_LINE_ITEM_LEVEL_REVENUE</ns:columns>
             <ns:columns>AD_EXCHANGE_LINE_ITEM_LEVEL_AVERAGE_ECPM</ns:columns>
+            <ns:columns>AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE</ns:columns>
+            <ns:columns>AD_EXCHANGE_MATCH_RATE</ns:columns>
             <ns:startDate>
               <ns:year>${fromDate.getUTCFullYear()}</ns:year>
               <ns:month>${fromDate.getUTCMonth() + 1}</ns:month>
@@ -205,8 +207,10 @@ async function parseGamCsv(csv: string): Promise<ParsedReportRow[]> {
               r['column_ad_exchange_line_item_level_revenue'] ?? r['revenue'] ?? 0) / 1_000_000,
             ecpm: Number(
               r['column_ad_exchange_line_item_level_average_ecpm'] ?? r['ecpm'] ?? 0) / 1_000_000,
-            viewability: 0,
-            matchRate: 0,
+            viewability: Number(
+              r['column_ad_exchange_active_view_viewable_impressions_rate'] ?? 0),
+            matchRate: Number(
+              r['column_ad_exchange_match_rate'] ?? 0),
           });
         }
         resolve(out);
