@@ -68,9 +68,11 @@ async function buildServer() {
 
 async function start() {
   const app = await buildServer();
+  // Render (and most PaaS) inject $PORT — honor it when present.
+  const port = Number(process.env.PORT) || env.API_PORT;
   try {
-    await app.listen({ port: env.API_PORT, host: env.API_HOST });
-    app.log.info(`API listening on ${env.API_HOST}:${env.API_PORT}`);
+    await app.listen({ port, host: env.API_HOST });
+    app.log.info(`API listening on ${env.API_HOST}:${port}`);
     app.log.info(`Swagger UI: ${env.PUBLIC_API_URL}/docs`);
   } catch (err) {
     app.log.error(err);

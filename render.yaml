@@ -1,0 +1,108 @@
+# Render Blueprint — GAM Arbitrage Reporting Dashboard
+#
+# Three services:
+#   1. gam-api   — Fastify backend (port from Render's $PORT)
+#   2. gam-web   — Next.js frontend (proxies /api/* to gam-api)
+#   3. gam-hourly-refresh — cron job that POSTs to /internal/cron/refresh
+#
+# Region: singapore (closest to India for ~120ms latency).
+#
+# Env vars marked `sync: false` must be pasted into the Render dashboard
+# after blueprint creation (secrets are never in this file).
+#
+# Database stays on Supabase — only DATABASE_URL is needed in env vars.
+
+services:
+  # ---------------------------------------------------------------- API
+  - type: web
+    name: gam-api
+    runtime: node
+    plan: starter
+    region: singapore
+    rootDir: .
+    buildCommand: |
+      corepack enable
+      corepack prepare pnpm@9.12.0 --activate
+      pnpm install --frozen-lockfile
+      pnpm --filter @gam/db generate
+      pnpm --filter @gam/api build
+    startCommand: pnpm --filter @gam/api start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: LOG_LEVEL
+        value: info
+      - key: AVG_ADS_PER_PAGE
+        value: "2"
+      - key: GAM_REPORT_TIMEZONE
+        value: Asia/Kolkata
+      - key: GAM_BACKFILL_DAYS_ON_FIRST_RUN
+        value: "90"
+      - key: GAM_INCREMENTAL_DAYS_PER_RUN
+        value: "7"
+      # --- secrets pasted in Render UI ---
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: GAM_NETWORK_CODE
+        sync: false
+      - key: GAM_USER_OAUTH_CLIENT_ID
+        sync: false
+      - key: GAM_USER_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GAM_USER_OAUTH_REFRESH_TOKEN
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false  # paste gam-web URL after first deploy
+      - key: PUBLIC_API_URL
+        sync: false  # paste gam-api URL after first deploy
+      - key: INTERNAL_CRON_SECRET
+        generateValue: true  # Render generates, cron service references it
+
+  # ---------------------------------------------------------------- WEB
+  - type: web
+    name: gam-web
+    runtime: node
+    plan: starter
+    region: singapore
+    rootDir: .
+    buildCommand: |
+      corepack enable
+      corepack prepare pnpm@9.12.0 --activate
+      pnpm install --frozen-lockfile
+      pnpm --filter @gam/db generate
+      pnpm --filter @gam/web build
+    startCommand: pnpm --filter @gam/web start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_AVG_ADS_PER_PAGE
+        value: "2"
+      # --- secrets pasted in Render UI ---
+      - key: NEXT_PUBLIC_API_URL
+        sync: false  # paste gam-api URL after first deploy
+      - key: DATABASE_URL
+        sync: false  # Prisma client is bundled with web
+
+  # ---------------------------------------------------------------- CRON
+  - type: cron
+    name: gam-hourly-refresh
+    runtime: node
+    plan: starter
+    region: singapore
+    schedule: "0 * * * *"  # top of every hour, UTC
+    rootDir: .
+    buildCommand: echo "no build — script uses Node stdlib only"
+    startCommand: node scripts/render-cron-refresh.mjs
+    envVars:
+      - key: INTERNAL_CRON_SECRET
+        fromService:
+          type: web
+          name: gam-api
+          envVarKey: INTERNAL_CRON_SECRET
+      - key: API_URL
+        sync: false  # paste gam-api public URL after first deploy
