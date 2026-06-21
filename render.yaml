@@ -23,7 +23,7 @@ services:
     buildCommand: |
       corepack enable
       corepack prepare pnpm@9.12.0 --activate
-      pnpm install --frozen-lockfile
+      pnpm install --frozen-lockfile --prod=false
       pnpm --filter @gam/db generate
       pnpm --filter @gam/api build
     startCommand: pnpm --filter @gam/api start
@@ -73,7 +73,7 @@ services:
     buildCommand: |
       corepack enable
       corepack prepare pnpm@9.12.0 --activate
-      pnpm install --frozen-lockfile
+      pnpm install --frozen-lockfile --prod=false
       pnpm --filter @gam/db generate
       pnpm --filter @gam/web build
     startCommand: pnpm --filter @gam/web start
