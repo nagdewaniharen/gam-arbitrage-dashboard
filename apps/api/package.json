@@ -10,7 +10,7 @@
     "gam:keys": "tsx src/cli/gam-keys.ts",
     "backfill": "tsx src/cli/backfill.ts",
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/apps/api/src/server.js",
+    "start": "tsx src/server.ts",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
