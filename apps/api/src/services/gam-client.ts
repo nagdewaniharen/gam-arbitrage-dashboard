@@ -193,12 +193,14 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       const columnsXmlBlock =
         columnFamily === 'total_line_item_level'
           ? [
+              // Line-item-attributed metrics only — these are valid when the
+              // LINE_ITEM_TYPE dimension is requested. TOTAL_AD_REQUESTS and
+              // network-level active-view columns are NOT valid at line-item
+              // granularity (GAM throws COLUMNS_NOT_SUPPORTED_FOR_REQUESTED_DIMENSIONS).
               'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
               'TOTAL_LINE_ITEM_LEVEL_CLICKS',
               'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
               'TOTAL_LINE_ITEM_LEVEL_AVERAGE_ECPM',
-              'TOTAL_AD_REQUESTS',
-              'TOTAL_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
             ]
               .map((c) => `<ns:columns>${c}</ns:columns>`)
               .join('\n            ')
@@ -227,6 +229,13 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
         .map((k) => `<ns:customDimensionKeyIds>${xmlEscape(k.id)}</ns:customDimensionKeyIds>`)
         .join('\n            ');
 
+      // Adding LINE_ITEM_TYPE as a dimension filters rows to only those with a
+      // line-item attribution. This matches GAM UI's "Programmatic channels"
+      // total exactly (excludes dynamic-allocation impressions that didn't
+      // route through a line item). Only emitted with the TOTAL family.
+      const lineItemTypeDimXml =
+        columnFamily === 'total_line_item_level' ? '<ns:dimensions>LINE_ITEM_TYPE</ns:dimensions>' : '';
+
       // GAM v202511 ReportQuery XSD requires this exact element order:
       //   dimensions → adUnitView → columns → customDimensionKeyIds → startDate → endDate → ...
       const runBody = `<ns:runReportJob>
@@ -234,6 +243,7 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
           <ns:reportQuery>
             <ns:dimensions>DATE</ns:dimensions>
             <ns:dimensions>AD_UNIT_NAME</ns:dimensions>
+            ${lineItemTypeDimXml}
             ${customDimsXml}
             <ns:adUnitView>TOP_LEVEL</ns:adUnitView>
             ${columnsXmlBlock}
@@ -396,7 +406,28 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             ) / 100,
           });
         }
-        resolve(out);
+        // Aggregate by (date, ad_unit) — when LINE_ITEM_TYPE dimension is
+        // present, GAM returns multiple rows per (date, ad_unit) (one per
+        // type). Sum metrics so the DB primary key (date, ad_unit) doesn't
+        // get overwritten on upsert.
+        const grouped = new Map<string, ParsedReportRow>();
+        for (const row of out) {
+          const key = `${row.date.toISOString().slice(0, 10)}::${row.adUnit}`;
+          const existing = grouped.get(key);
+          if (!existing) {
+            grouped.set(key, row);
+          } else {
+            const impSum = existing.impressions + row.impressions;
+            const clickSum = existing.clicks + row.clicks;
+            const revSum = existing.revenue + row.revenue;
+            existing.impressions = impSum;
+            existing.clicks = clickSum;
+            existing.revenue = revSum;
+            // Weighted-average viewability/matchRate; eCPM recalculated from totals.
+            existing.ecpm = impSum > 0n ? (revSum / Number(impSum)) * 1000 : 0;
+          }
+        }
+        resolve(Array.from(grouped.values()));
       },
     );
   });
