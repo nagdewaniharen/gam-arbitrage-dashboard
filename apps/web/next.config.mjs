@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
   async rewrites() {
     // `fallback` rewrites run AFTER static files, page files, AND dynamic
     // routes — critical so NextAuth's /api/auth/[...nextauth] catch-all
