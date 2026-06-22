@@ -17,7 +17,6 @@
  */
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
-import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@gam/db';
 
 const ALLOWED_DOMAIN = (process.env.ALLOWED_GOOGLE_DOMAIN ?? '').toLowerCase();
@@ -35,10 +34,11 @@ if (process.env.GOOGLE_OAUTH_CLIENT_ID && !ALLOWED_DOMAIN) {
 // `as any` on the inferred return suppresses TS2742 portability errors —
 // NextAuth's return type references types deep inside node_modules that can't
 // be portably named from this file. Behaviour is unchanged.
+// JWT-only sessions (ADR-013): no Prisma adapter — the User table is the
+// only one we maintain, and we upsert it manually in the signIn callback.
+// PrismaAdapter would expect Account/Session/VerificationToken tables too.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _nextAuth: any = NextAuth({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  adapter: PrismaAdapter(prisma as any),
   session: { strategy: 'jwt', maxAge: 7 * 24 * 60 * 60 },
   trustHost: true,
   providers: [
