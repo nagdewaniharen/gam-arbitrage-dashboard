@@ -93,7 +93,7 @@ export default function DashboardPage() {
       ) : null}
 
       {/* KPI cards — 5 cards including RPV */}
-      <section className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-4">
         <KpiCard
           label="Revenue"
           value={s ? fmt.usd(s.totalRevenue) : '—'}
@@ -120,6 +120,20 @@ export default function DashboardPage() {
           value={s ? fmt.num(s.totalClicks) : '—'}
           sub={s ? `CTR ${fmt.pct(s.ctr)}` : undefined}
           accent="clicks"
+          loading={stats.isLoading}
+        />
+        <KpiCard
+          label="Viewability"
+          value={s ? fmt.pct(s.viewability) : '—'}
+          sub="% viewable impressions"
+          accent="viewability"
+          loading={stats.isLoading}
+        />
+        <KpiCard
+          label="Match Rate"
+          value={s ? fmt.pct(s.matchRate) : '—'}
+          sub="% matched requests"
+          accent="matchRate"
           loading={stats.isLoading}
         />
         <KpiCard

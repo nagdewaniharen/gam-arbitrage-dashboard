@@ -8,6 +8,8 @@ interface TotalsRow {
   impressions: bigint | null;
   clicks: bigint | null;
   revenue: Prisma.Decimal | null;
+  viewability: Prisma.Decimal | null;
+  match_rate: Prisma.Decimal | null;
 }
 
 async function totalsForRange(from: Date | null, to: Date | null): Promise<{
@@ -16,6 +18,8 @@ async function totalsForRange(from: Date | null, to: Date | null): Promise<{
   totalRevenue: number;
   avgEcpm: number;
   ctr: number;
+  viewability: number;
+  matchRate: number;
 }> {
   let where = Prisma.empty;
   if (from && to) {
@@ -28,11 +32,13 @@ async function totalsForRange(from: Date | null, to: Date | null): Promise<{
     SELECT
       COALESCE(SUM(impressions), 0)::bigint AS impressions,
       COALESCE(SUM(clicks), 0)::bigint      AS clicks,
-      COALESCE(SUM(revenue), 0)             AS revenue
+      COALESCE(SUM(revenue), 0)             AS revenue,
+      COALESCE(SUM(viewability * impressions) / NULLIF(SUM(impressions), 0), 0) AS viewability,
+      COALESCE(SUM(match_rate  * impressions) / NULLIF(SUM(impressions), 0), 0) AS match_rate
     FROM gam_reports
     ${where}
   `);
-  const row = rows[0] ?? { impressions: 0n, clicks: 0n, revenue: new Prisma.Decimal(0) };
+  const row = rows[0] ?? { impressions: 0n, clicks: 0n, revenue: new Prisma.Decimal(0), viewability: new Prisma.Decimal(0), match_rate: new Prisma.Decimal(0) };
   const impressions = Number(row.impressions ?? 0n);
   const clicks = Number(row.clicks ?? 0n);
   const revenue = Number(row.revenue ?? 0);
@@ -44,6 +50,8 @@ async function totalsForRange(from: Date | null, to: Date | null): Promise<{
     totalRevenue: revenue,
     avgEcpm,
     ctr,
+    viewability: Number(row.viewability ?? 0),
+    matchRate: Number(row.match_rate ?? 0),
   };
 }
 

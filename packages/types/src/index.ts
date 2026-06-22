@@ -31,6 +31,8 @@ export interface StatsResponse {
   totalClicks: number;
   avgEcpm: number;
   ctr: number;
+  viewability: number;
+  matchRate: number;
   previousPeriod?: {
     totalRevenue: number;
     totalImpressions: number;

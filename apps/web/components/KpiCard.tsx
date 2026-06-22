@@ -1,13 +1,15 @@
 import { TrendingDown, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-type Accent = 'revenue' | 'impressions' | 'ecpm' | 'clicks';
+type Accent = 'revenue' | 'impressions' | 'ecpm' | 'clicks' | 'viewability' | 'matchRate';
 
 const ACCENT_DOT: Record<Accent, string> = {
   revenue: 'bg-[--color-accent-revenue]',
   impressions: 'bg-[--color-accent-impressions]',
   ecpm: 'bg-[--color-accent-ecpm]',
   clicks: 'bg-[--color-accent-clicks]',
+  viewability: 'bg-[--color-accent-ecpm]',
+  matchRate: 'bg-[--color-accent-impressions]',
 };
 
 export function KpiCard({
