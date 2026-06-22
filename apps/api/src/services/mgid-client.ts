@@ -20,7 +20,7 @@ export interface MgidSpendRow {
 
 export async function fetchMgidSpend(
   opts: { fromDate: Date; toDate: Date },
-  log: { info: (m: string, e?: unknown) => void; warn: (m: string, e?: unknown) => void; error: (m: string, e?: unknown) => void },
+  log: { info: (_m: string, _e?: unknown) => void; warn: (_m: string, _e?: unknown) => void; error: (_m: string, _e?: unknown) => void },
 ): Promise<MgidSpendRow[]> {
   if (!env.MGID_API_KEY || env.MGID_API_KEY === 'change_me_when_available') {
     log.warn('MGID_API_KEY not configured — skipping MGID pull');
@@ -69,7 +69,7 @@ export async function fetchMgidSpend(
 
 export async function syncMgidSpend(
   opts: { daysBack?: number; fromDate?: Date; toDate?: Date; trigger: string },
-  log: { info: (m: string, e?: unknown) => void; warn: (m: string, e?: unknown) => void; error: (m: string, e?: unknown) => void },
+  log: { info: (_m: string, _e?: unknown) => void; warn: (_m: string, _e?: unknown) => void; error: (_m: string, _e?: unknown) => void },
 ): Promise<{ pulled: number; upserted: number; status: 'succeeded' | 'failed' | 'skipped'; error?: string }> {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);

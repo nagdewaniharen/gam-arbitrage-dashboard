@@ -12,12 +12,11 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { jwtVerify } from 'jose';
-import { env } from '../config/env.js';
 
 const OPEN_PATHS = ['/api/health', '/api/status', '/docs', '/internal/'];
 
 declare module 'fastify' {
-  interface FastifyRequest {
+  interface FastifyRequest { // eslint-disable-line no-unused-vars
     user?: { email: string; role: 'admin' | 'user' };
   }
 }
@@ -67,7 +66,7 @@ function readCookie(header: string, name: string): string | undefined {
 }
 
 /** Use as a per-route preHandler to require admin role. */
-export function requireAdmin(req: FastifyRequest, reply: import('fastify').FastifyReply, done: (err?: Error) => void): void {
+export function requireAdmin(req: FastifyRequest, reply: import('fastify').FastifyReply, done: (_err?: Error) => void): void {
   if (!req.user) {
     reply.code(401).send({ ok: false, error: { code: 'UNAUTHENTICATED', message: '' } });
     return;

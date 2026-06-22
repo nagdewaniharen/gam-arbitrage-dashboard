@@ -15,7 +15,7 @@ export interface SlackAlert {
 
 export async function postSlackAlert(
   alert: SlackAlert,
-  log: { info: (m: string, e?: unknown) => void; warn: (m: string, e?: unknown) => void; error: (m: string, e?: unknown) => void },
+  log: { info: (_m: string, _e?: unknown) => void; warn: (_m: string, _e?: unknown) => void; error: (_m: string, _e?: unknown) => void },
 ): Promise<{ delivered: boolean; reason?: string }> {
   if (!env.SLACK_WEBHOOK_URL) {
     log.info('Slack webhook not configured — skipping alert', { title: alert.title });

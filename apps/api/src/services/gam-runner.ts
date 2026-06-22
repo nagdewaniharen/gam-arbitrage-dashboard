@@ -33,7 +33,7 @@ export interface RefreshResult {
 
 export async function runRefresh(
   opts: RefreshOptions,
-  log: { info: (m: string, e?: unknown) => void; warn: (m: string, e?: unknown) => void; error: (m: string, e?: unknown) => void },
+  log: { info: (_m: string, _e?: unknown) => void; warn: (_m: string, _e?: unknown) => void; error: (_m: string, _e?: unknown) => void },
 ): Promise<RefreshResult> {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);

@@ -13,9 +13,9 @@
 import { env } from '../config/env.js';
 
 interface Logger {
-  info: (m: string, e?: unknown) => void;
-  warn: (m: string, e?: unknown) => void;
-  error: (m: string, e?: unknown) => void;
+  info: (_m: string, _e?: unknown) => void;
+  warn: (_m: string, _e?: unknown) => void;
+  error: (_m: string, _e?: unknown) => void;
 }
 
 export async function archiveRawCsv(

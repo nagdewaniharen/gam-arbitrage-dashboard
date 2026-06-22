@@ -3,13 +3,13 @@
  * Used for all external API calls (GAM, MGID, Slack).
  */
 export async function retry<T>(
-  fn: (attempt: number) => Promise<T>,
+  fn: (_attempt: number) => Promise<T>,
   opts: {
     maxAttempts?: number;
     baseDelayMs?: number;
     maxDelayMs?: number;
-    shouldRetry?: (err: unknown, attempt: number) => boolean;
-    onRetry?: (err: unknown, attempt: number, delayMs: number) => void;
+    shouldRetry?: (_err: unknown, _attempt: number) => boolean;
+    onRetry?: (_err: unknown, _attempt: number, _delayMs: number) => void;
   } = {},
 ): Promise<T> {
   const {

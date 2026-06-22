@@ -34,9 +34,9 @@ const APP_NAME = 'GAM Arbitrage Dashboard';
 const REFRESH_TOKEN_PATH = path.resolve(process.cwd(), '../../secrets/gam-user-refresh-token.json');
 
 interface Logger {
-  info: (m: string, e?: unknown) => void;
-  warn: (m: string, e?: unknown) => void;
-  error: (m: string, e?: unknown) => void;
+  info: (_m: string, _e?: unknown) => void;
+  warn: (_m: string, _e?: unknown) => void;
+  error: (_m: string, _e?: unknown) => void;
 }
 
 /* ----------------------------- AUTH (OAuth2) ----------------------------- */
