@@ -62,6 +62,16 @@ export async function runRefresh(
   try {
     log.info(`gam.refresh: ${fromDate.toISOString()} → ${toDate.toISOString()}`);
     const rows = await runGamReport({ fromDate, toDate }, log);
+    // Clear existing rows in this date range before upserting. This keeps the
+    // DB in sync with GAM's source of truth — if a (date, ad_unit) drops out
+    // of the report (e.g., because column-family / dimension changes filtered
+    // it out), the stale row gets removed instead of lingering with old data.
+    const fromIso = fromDate.toISOString().slice(0, 10);
+    const toIso = toDate.toISOString().slice(0, 10);
+    const deleted = await prisma.gamReport.deleteMany({
+      where: { date: { gte: new Date(fromIso), lte: new Date(toIso) } },
+    });
+    log.info(`gam.refresh: cleared ${deleted.count} stale rows in [${fromIso}, ${toIso}]`);
     const upserted = await upsertRows(rows);
     const durationMs = Date.now() - start;
 
