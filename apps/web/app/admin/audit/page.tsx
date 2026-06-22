@@ -6,7 +6,7 @@ import { Search } from 'lucide-react';
 import { AdminNav } from '@/components/AdminNav';
 import { formatIST } from '@/lib/time';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 interface AuditRow {
   id: string;

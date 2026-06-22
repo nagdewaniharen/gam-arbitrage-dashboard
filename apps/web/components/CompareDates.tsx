@@ -6,7 +6,7 @@ import { TrendingDown, TrendingUp, ArrowRight } from 'lucide-react';
 import { fmt } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 interface CompareResp {
   a: { from: string; to: string; impressions: number; clicks: number; revenue: number; ecpm: number; ctr: number };

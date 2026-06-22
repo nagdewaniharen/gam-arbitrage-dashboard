@@ -9,7 +9,7 @@ import { UserMenu } from './UserMenu';
 import { freshnessTier, relativeTime, formatIST } from '@/lib/time';
 import { cn } from '@/lib/cn';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export function Header({
   period,
