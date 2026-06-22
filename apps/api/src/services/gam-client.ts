@@ -134,6 +134,14 @@ export interface GamReportRunOptions {
   fromDate: Date;
   toDate: Date;
   timezone?: string;
+  /**
+   * Which GAM column family to request.
+   *   - 'ad_exchange' (default): AD_EXCHANGE_* — Open Auction only.
+   *   - 'total_line_item_level': TOTAL_LINE_ITEM_LEVEL_* — sum of ALL programmatic
+   *     channels (Open Auction + Preferred Deals + Programmatic Guaranteed + direct).
+   *     Matches the GAM UI "Programmatic channels" total.
+   */
+  columnFamily?: 'ad_exchange' | 'total_line_item_level';
 }
 
 export interface ParsedReportRow {
@@ -177,7 +185,33 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
   return retry(
     async () => {
       const { fromDate, toDate, timezone = env.GAM_REPORT_TIMEZONE } = opts;
+      // Default is TOTAL_LINE_ITEM_LEVEL_* to match the GAM UI "Programmatic
+      // channels" total (Open Auction + Preferred Deals + PG + direct sold).
+      // The 'ad_exchange' family stays available for arbitrage-focused analysis.
+      const columnFamily = opts.columnFamily ?? 'total_line_item_level';
       const customKeys = parseCustomKeyIds();
+      const columnsXmlBlock =
+        columnFamily === 'total_line_item_level'
+          ? [
+              'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+              'TOTAL_LINE_ITEM_LEVEL_CLICKS',
+              'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+              'TOTAL_LINE_ITEM_LEVEL_AVERAGE_ECPM',
+              'TOTAL_AD_REQUESTS',
+              'TOTAL_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
+            ]
+              .map((c) => `<ns:columns>${c}</ns:columns>`)
+              .join('\n            ')
+          : [
+              'AD_EXCHANGE_IMPRESSIONS',
+              'AD_EXCHANGE_CLICKS',
+              'AD_EXCHANGE_REVENUE',
+              'AD_EXCHANGE_AVERAGE_ECPM',
+              'AD_EXCHANGE_RESPONSES_SERVED',
+              'AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
+            ]
+              .map((c) => `<ns:columns>${c}</ns:columns>`)
+              .join('\n            ');
 
       // Custom-targeting reporting is blocked at the GAM API level on this
       // network (ADR-018). Every combination tried returns
@@ -202,12 +236,7 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
             <ns:dimensions>AD_UNIT_NAME</ns:dimensions>
             ${customDimsXml}
             <ns:adUnitView>TOP_LEVEL</ns:adUnitView>
-            <ns:columns>AD_EXCHANGE_IMPRESSIONS</ns:columns>
-            <ns:columns>AD_EXCHANGE_CLICKS</ns:columns>
-            <ns:columns>AD_EXCHANGE_REVENUE</ns:columns>
-            <ns:columns>AD_EXCHANGE_AVERAGE_ECPM</ns:columns>
-            <ns:columns>AD_EXCHANGE_RESPONSES_SERVED</ns:columns>
-            <ns:columns>AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS</ns:columns>
+            ${columnsXmlBlock}
             ${customKeyIdsXml}
             <ns:startDate>
               <ns:year>${fromDate.getUTCFullYear()}</ns:year>
@@ -326,30 +355,35 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             image: get(r, 'image'),
             page: r['dimension_page'] ?? r['page'] ?? '',
             impressions: BigInt(Math.floor(Number(
+              r['column_total_line_item_level_impressions'] ??
               r['column_ad_server_impressions'] ??
               r['column_ad_exchange_impressions'] ??
               r['column_ad_exchange_line_item_level_impressions'] ??
               r['impressions'] ?? 0,
             ))),
             clicks: BigInt(Math.floor(Number(
+              r['column_total_line_item_level_clicks'] ??
               r['column_ad_server_clicks'] ??
               r['column_ad_exchange_clicks'] ??
               r['column_ad_exchange_line_item_level_clicks'] ??
               r['clicks'] ?? 0,
             ))),
             revenue: Number(
+              r['column_total_line_item_level_cpm_and_cpc_revenue'] ??
               r['column_ad_server_cpm_and_cpc_revenue'] ??
               r['column_ad_exchange_revenue'] ??
               r['column_ad_exchange_line_item_level_revenue'] ??
               r['revenue'] ?? 0,
             ) / 1_000_000,
             ecpm: Number(
+              r['column_total_line_item_level_average_ecpm'] ??
               r['column_ad_server_average_ecpm'] ??
               r['column_ad_exchange_average_ecpm'] ??
               r['column_ad_exchange_line_item_level_average_ecpm'] ??
               r['ecpm'] ?? 0,
             ) / 1_000_000,
             viewability: Number(
+              r['column_total_active_view_percent_viewable_impressions'] ??
               r['column_ad_exchange_active_view_percent_viewable_impressions'] ??
               r['column_ad_exchange_active_view_viewable_impressions_rate'] ??
               r['column_ad_exchange_line_item_level_percent_viewable_impressions'] ??
