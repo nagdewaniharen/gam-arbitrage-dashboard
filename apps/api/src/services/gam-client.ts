@@ -352,6 +352,12 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
           if (!dateStr) continue;
           const date = new Date(dateStr);
           if (isNaN(date.getTime())) continue;
+          // When the LINE_ITEM_TYPE dimension is included, GAM emits rows
+          // for both line-item-attributed and unattributed traffic. Drop the
+          // unattributed rows — that's what GAM UI's "Programmatic channels"
+          // total filters out, and matching that view is the goal.
+          const lineItemType = r['dimension_line_item_type'] ?? r['line_item_type'] ?? '';
+          if (lineItemType === '' || lineItemType.toUpperCase() === 'UNKNOWN' || lineItemType.toUpperCase() === 'NULL') continue;
           // Column-name mapping decided by ADR-016. We accept both new (AD_EXCHANGE_*)
           // and legacy (LINE_ITEM_LEVEL_*) header names so existing CSV uploads work.
           // Revenue and eCPM are micros (1/1,000,000 of report currency).
