@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { LogIn, LogOut, ShieldCheck, User as UserIcon, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
+import { signInAction, signOutAction } from '@/lib/auth-actions';
 
 interface MeResponse {
   ok: boolean;
@@ -28,25 +29,27 @@ async function fetchMe(): Promise<MeResponse> {
 
 /**
  * Shows the logged-in user's email + role, with a sign-out button.
- * Hidden entirely when SSO is not configured (Phase 1 mode).
+ * Sign-in / sign-out go through server actions so NextAuth v5 sees the
+ * required POST + CSRF — plain <a href> hits the v5 400 wall.
  */
 export function UserMenu() {
   const [open, setOpen] = useState(false);
-  const ssoOn = !!process.env.NEXT_PUBLIC_SSO_ENABLED;
-  const q = useQuery({ queryKey: ['me'], queryFn: fetchMe, staleTime: 60_000, enabled: ssoOn });
+  const q = useQuery({ queryKey: ['me'], queryFn: fetchMe, staleTime: 60_000 });
 
-  // In Phase 1 mode (no SSO env), don't show anything.
-  if (!ssoOn) return null;
-
+  // If the session probe came back empty, the user isn't signed in. Either
+  // SSO isn't configured (Phase 1) or the cookie expired — offer sign-in
+  // either way, the server action will no-op safely if SSO is off.
   if (!q.data?.ok) {
     return (
-      <a
-        href="/api/auth/signin/google"
-        className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-[--color-border] bg-[--color-surface-2] hover:bg-[--color-surface-hover] transition"
-      >
-        <LogIn size={12} />
-        Sign in
-      </a>
+      <form action={signInAction}>
+        <button
+          type="submit"
+          className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-[--color-border] bg-[--color-surface-2] hover:bg-[--color-surface-hover] transition"
+        >
+          <LogIn size={12} />
+          Sign in
+        </button>
+      </form>
     );
   }
 
@@ -80,15 +83,17 @@ export function UserMenu() {
               Admin panel
             </Link>
           ) : null}
-          <a
-            href="/api/auth/signout"
-            className="block text-xs px-2 py-1.5 rounded hover:bg-[--color-surface-hover] transition text-[--color-danger] mt-1"
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <LogOut size={11} />
-              Sign out
-            </span>
-          </a>
+          <form action={signOutAction} className="mt-1">
+            <button
+              type="submit"
+              className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-[--color-surface-hover] transition text-[--color-danger]"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <LogOut size={11} />
+                Sign out
+              </span>
+            </button>
+          </form>
         </div>
       ) : null}
     </div>
