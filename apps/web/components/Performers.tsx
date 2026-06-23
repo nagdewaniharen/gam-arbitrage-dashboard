@@ -35,12 +35,17 @@ export function Performers({
   loading?: boolean;
 }) {
   const accent = variant === 'top' ? 'text-[--color-success]' : 'text-[--color-danger]';
+  // PRD §10.3.5 — visually distinct top vs bottom. Add a colored top
+  // border so the variant is unmistakable even before reading the label.
+  const ring = variant === 'top'
+    ? 'border-t-2 border-t-[--color-success]'
+    : 'border-t-2 border-t-[--color-danger]';
   const Icon = variant === 'top' ? TrendingUp : TrendingDown;
   const label = variant === 'top' ? 'Top 10 by eCPM' : 'Bottom 10 by eCPM';
   const dims = VALID_DIMENSIONS.filter((d) => d !== 'date');
 
   return (
-    <div className="card">
+    <div className={cn('card', ring)}>
       <div className="flex items-center justify-between mb-3 gap-3">
         <div className={cn('inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em]', accent)}>
           <Icon size={12} />

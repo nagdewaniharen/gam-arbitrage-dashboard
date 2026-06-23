@@ -12,6 +12,17 @@ const ACCENT_DOT: Record<Accent, string> = {
   matchRate: 'bg-[--color-accent-impressions]',
 };
 
+// PRD §10.3.1 — color the actual value text per metric:
+// Revenue green, Impressions blue, eCPM yellow, Clicks neutral white.
+const ACCENT_TEXT: Record<Accent, string> = {
+  revenue: 'text-[--color-accent-revenue]',
+  impressions: 'text-[--color-accent-impressions]',
+  ecpm: 'text-[--color-accent-ecpm]',
+  clicks: 'text-[--color-text]',
+  viewability: 'text-[--color-accent-ecpm]',
+  matchRate: 'text-[--color-accent-impressions]',
+};
+
 export function KpiCard({
   label,
   value,
@@ -38,7 +49,7 @@ export function KpiCard({
       {loading ? (
         <div className="h-9 w-32 rounded bg-[--color-surface-2] animate-pulse" />
       ) : (
-        <div className="text-[28px] leading-tight font-semibold font-mono-num">{value}</div>
+        <div className={cn('text-[28px] leading-tight font-semibold font-mono-num', ACCENT_TEXT[accent])}>{value}</div>
       )}
       {sub ? <div className="text-xs text-[--color-text-dim]">{sub}</div> : null}
       {hasChange ? (

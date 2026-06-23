@@ -14,6 +14,7 @@ import { CrossAnalysis } from '@/components/CrossAnalysis';
 import { CsvUpload } from '@/components/CsvUpload';
 import { CostRoi } from '@/components/CostRoi';
 import { SpendForm } from '@/components/SpendForm';
+import { SpendCsvUpload } from '@/components/SpendCsvUpload';
 import { CompareDates } from '@/components/CompareDates';
 import { EmptyState } from '@/components/EmptyState';
 import { Footer } from '@/components/Footer';
@@ -227,12 +228,13 @@ export default function DashboardPage() {
         <CompareDates />
       </section>
 
-      {/* Spend entry */}
-      <section className="mb-4">
+      {/* Spend entry (PRD §9.3.7) — manual + CSV side-by-side */}
+      <section className="grid lg:grid-cols-2 gap-4 mb-4">
         <SpendForm />
+        <SpendCsvUpload />
       </section>
 
-      {/* CSV upload */}
+      {/* GAM report CSV upload (fallback per PRD §9.3.8) */}
       <section className="mb-4">
         <CsvUpload />
       </section>

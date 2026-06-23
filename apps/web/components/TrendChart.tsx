@@ -71,15 +71,29 @@ export function TrendChart({ points, loading }: { points: TrendPoint[]; loading?
             />
             <Tooltip
               cursor={{ fill: '#ffffff08' }}
-              contentStyle={{
-                background: '#1b1f27',
-                border: '1px solid #2f3540',
-                borderRadius: 8,
-                fontSize: 12,
-                padding: '8px 10px',
+              content={({ active, payload }) => {
+                if (!active || !payload || payload.length === 0) return null;
+                const p = payload[0]?.payload as TrendPoint | undefined;
+                if (!p) return null;
+                const d = new Date(p.date);
+                const dateLabel = d.toLocaleDateString('en-IN', {
+                  weekday: 'short',
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                });
+                return (
+                  <div className="rounded-lg border border-[--color-border-strong] bg-[--color-surface-3] px-3 py-2 text-xs shadow-2xl">
+                    <div className="mb-1.5 text-[11px] font-medium text-[--color-text]">{dateLabel}</div>
+                    <div className="flex flex-col gap-0.5 font-mono-num">
+                      <Row label="Revenue" value={fmt.usd(p.revenue)} color="text-[--color-accent-revenue]" />
+                      <Row label="Impressions" value={fmt.num(p.impressions)} color="text-[--color-accent-impressions]" />
+                      <Row label="eCPM" value={fmt.ecpm(p.ecpm)} color="text-[--color-accent-ecpm]" />
+                      <Row label="Clicks" value={fmt.num(p.clicks)} color="text-[--color-accent-clicks]" />
+                    </div>
+                  </div>
+                );
               }}
-              labelStyle={{ color: '#e7e7ea', marginBottom: 4, fontSize: 11 }}
-              formatter={(value: number) => [fmt.usd(value), 'Revenue']}
             />
             <Bar dataKey="revenue" radius={[4, 4, 0, 0]} maxBarSize={56}>
               {points.map((p) => (
@@ -97,6 +111,15 @@ function EmptyState({ label }: { label: string }) {
   return (
     <div className="h-[82%] flex items-center justify-center text-sm text-[--color-text-muted]">
       {label}
+    </div>
+  );
+}
+
+function Row({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-[--color-text-muted]">{label}</span>
+      <span className={color}>{value}</span>
     </div>
   );
 }
