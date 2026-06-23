@@ -79,7 +79,7 @@ export function Header({
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 md:justify-end">
         <button
           type="button"
           onClick={() => refresh.mutate()}
@@ -97,7 +97,7 @@ export function Header({
           }
         >
           <RefreshCw size={12} className={refresh.isPending ? 'animate-spin' : ''} />
-          {refresh.isPending ? 'Refreshing' : 'Refresh'}
+          <span className="hidden sm:inline">{refresh.isPending ? 'Refreshing' : 'Refresh'}</span>
         </button>
         <PeriodSelector
           value={period}

@@ -39,34 +39,43 @@ export default function DashboardPage() {
   const [topMinImpr, setTopMinImpr] = useState<number>(10);
   const [bottomMinImpr, setBottomMinImpr] = useState<number>(10);
 
-  const stats = useQuery({ queryKey: ['stats', periodKey], queryFn: () => api.stats(period, customRange) });
-  const trend = useQuery({ queryKey: ['trend', periodKey], queryFn: () => api.trend(period, customRange) });
+  // PRD §10.1 — auto-refresh every 5 min (300_000 ms). Browser tabs that
+  // stay open update without a manual refresh button click.
+  const REFRESH_MS = 5 * 60 * 1000;
+  const stats = useQuery({ queryKey: ['stats', periodKey], queryFn: () => api.stats(period, customRange), refetchInterval: REFRESH_MS });
+  const trend = useQuery({ queryKey: ['trend', periodKey], queryFn: () => api.trend(period, customRange), refetchInterval: REFRESH_MS });
 
   const breakA = useQuery({
     queryKey: ['breakdown', dimA, periodKey],
     queryFn: () => api.breakdown(dimA, period, 100, customRange),
+    refetchInterval: REFRESH_MS,
   });
   const breakB = useQuery({
     queryKey: ['breakdown', dimB, periodKey],
     queryFn: () => api.breakdown(dimB, period, 100, customRange),
+    refetchInterval: REFRESH_MS,
   });
 
   const cross = useQuery({
     queryKey: ['cross', crossDim1, crossDim2, periodKey],
     queryFn: () => api.cross(crossDim1, crossDim2, period, 500, customRange),
     enabled: crossDim1 !== crossDim2,
+    refetchInterval: REFRESH_MS,
   });
 
   const top = useQuery({
     queryKey: ['performers', 'top', topBy, periodKey, topMinImpr],
     queryFn: () => api.performers('top', topBy, period, 10, customRange),
+    refetchInterval: REFRESH_MS,
   });
   const bot = useQuery({
     queryKey: ['performers', 'bottom', bottomBy, periodKey, bottomMinImpr],
     queryFn: () => api.performers('bottom', bottomBy, period, 10, customRange),
+    refetchInterval: REFRESH_MS,
   });
 
-  const status = useQuery({ queryKey: ['status'], queryFn: () => api.status() });
+  // Status pings every minute so the "last sync" badge stays accurate.
+  const status = useQuery({ queryKey: ['status'], queryFn: () => api.status(), refetchInterval: 60_000 });
   const s = stats.data;
   const dbEmpty = status.data?.totalRows === 0;
 
@@ -98,8 +107,8 @@ export default function DashboardPage() {
         </section>
       ) : null}
 
-      {/* KPI cards — 5 cards including RPV */}
-      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-4">
+      {/* KPI cards — 7 cards. Mobile (≥360px): 2 cols. md: 3 cols. lg: 7 cols. */}
+      <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 mb-4">
         <KpiCard
           label="Revenue"
           value={s ? fmt.usd(s.totalRevenue) : '—'}
