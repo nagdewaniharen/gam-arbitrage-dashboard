@@ -53,8 +53,10 @@ export function KpiCard({
     <div
       className={cn(
         // Accent stripe via a ::before pseudo-element so we don't touch the card padding.
+        // `before:content-['']` is REQUIRED — without it, Tailwind's pseudo-elements
+        // collapse and the stripe never renders.
         'card relative flex flex-col gap-2 min-h-[118px] overflow-hidden',
-        'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1',
+        "before:content-[''] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5",
         ACCENT_STRIPE[accent],
       )}
     >
