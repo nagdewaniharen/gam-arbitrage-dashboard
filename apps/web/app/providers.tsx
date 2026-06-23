@@ -17,9 +17,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000,
-            refetchInterval: 5 * 60 * 1000, // 5 minutes per PRD §9.1
-            refetchOnWindowFocus: false,
+            // Always refetch on mount — fixes the "first-load shows zeros"
+            // case where a stale cached response (or another tab's data)
+            // briefly flashes through before the live query lands.
+            staleTime: 0,
+            refetchOnMount: 'always',
+            refetchInterval: 5 * 60 * 1000, // PRD §10.1 — 5-min auto-refresh
+            refetchOnWindowFocus: true,
             retry: 1,
           },
         },
