@@ -35,17 +35,17 @@ export function Performers({
   loading?: boolean;
 }) {
   const accent = variant === 'top' ? 'text-[--color-success]' : 'text-[--color-danger]';
-  // PRD §10.3.5 — visually distinct top vs bottom. Add a colored top
-  // border so the variant is unmistakable even before reading the label.
-  const ring = variant === 'top'
-    ? 'border-t-2 border-t-[--color-success]'
-    : 'border-t-2 border-t-[--color-danger]';
+  // PRD §10.3.5 — make the variant unmistakable: thick colored top band
+  // + matching translucent background tint so Top vs Bottom reads instantly.
+  const variantStyles = variant === 'top'
+    ? 'border-t-4 border-t-[--color-success] bg-[--color-success]/[0.04]'
+    : 'border-t-4 border-t-[--color-danger] bg-[--color-danger]/[0.04]';
   const Icon = variant === 'top' ? TrendingUp : TrendingDown;
   const label = variant === 'top' ? 'Top 10 by eCPM' : 'Bottom 10 by eCPM';
   const dims = VALID_DIMENSIONS.filter((d) => d !== 'date');
 
   return (
-    <div className={cn('card', ring)}>
+    <div className={cn('card', variantStyles)}>
       <div className="flex items-center justify-between mb-3 gap-3">
         <div className={cn('inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em]', accent)}>
           <Icon size={12} />
