@@ -22,14 +22,14 @@ const ACCENT_TEXT: Record<Accent, string> = {
   matchRate: 'text-[--color-accent-impressions]',
 };
 
-// Left-edge stripe — makes the accent unmistakable even from across the room.
-const ACCENT_STRIPE: Record<Accent, string> = {
-  revenue: 'before:bg-[--color-accent-revenue]',
-  impressions: 'before:bg-[--color-accent-impressions]',
-  ecpm: 'before:bg-[--color-accent-ecpm]',
-  clicks: 'before:bg-[--color-accent-clicks]',
-  viewability: 'before:bg-[--color-accent-ecpm]',
-  matchRate: 'before:bg-[--color-accent-impressions]',
+// Left-edge stripe via plain border-l-4 — pseudo-elements were flaky.
+const ACCENT_BORDER: Record<Accent, string> = {
+  revenue: 'border-l-4 border-l-[--color-accent-revenue]',
+  impressions: 'border-l-4 border-l-[--color-accent-impressions]',
+  ecpm: 'border-l-4 border-l-[--color-accent-ecpm]',
+  clicks: 'border-l-4 border-l-[--color-accent-clicks]',
+  viewability: 'border-l-4 border-l-[--color-accent-ecpm]',
+  matchRate: 'border-l-4 border-l-[--color-accent-impressions]',
 };
 
 export function KpiCard({
@@ -52,12 +52,8 @@ export function KpiCard({
   return (
     <div
       className={cn(
-        // Accent stripe via a ::before pseudo-element so we don't touch the card padding.
-        // `before:content-['']` is REQUIRED — without it, Tailwind's pseudo-elements
-        // collapse and the stripe never renders.
-        'card relative flex flex-col gap-2 min-h-[118px] overflow-hidden',
-        "before:content-[''] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5",
-        ACCENT_STRIPE[accent],
+        'card flex flex-col gap-2 min-h-[118px]',
+        ACCENT_BORDER[accent],
       )}
     >
       <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[--color-text-muted]">

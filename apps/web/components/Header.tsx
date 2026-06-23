@@ -30,22 +30,33 @@ export function Header({
   const [toast, setToast] = useState<string | null>(null);
   const refresh = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${BASE}/api/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ daysBack: 30 }),
-      });
-      if (!res.ok) throw new Error(`Refresh failed (${res.status})`);
-      return res.json();
+      // Pull last 7 days — covers all visible windows (Today / 7d / 30d
+      // re-aggregate from same rows). Faster than a 30-day pull (~15s vs
+      // ~30s) which is the difference between "snappy" and "broken-feeling".
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 60_000);
+      try {
+        const res = await fetch(`${BASE}/api/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ daysBack: 7 }),
+          signal: ctrl.signal,
+        });
+        if (!res.ok) throw new Error(`Refresh failed (${res.status})`);
+        return res.json();
+      } finally {
+        clearTimeout(timeout);
+      }
     },
-    onSuccess: () => {
-      setToast('Refresh triggered — fetching latest data');
+    onSuccess: (data) => {
+      const rows = data?.data?.rowsUpserted ?? 0;
+      setToast(`Refresh complete — ${rows} rows updated from GAM`);
       void qc.invalidateQueries();
       setTimeout(() => setToast(null), 3500);
     },
-    onError: () => {
-      setToast('Refresh failed');
-      setTimeout(() => setToast(null), 3500);
+    onError: (e) => {
+      setToast(`Refresh failed: ${(e as Error).message}`);
+      setTimeout(() => setToast(null), 4500);
     },
   });
 
