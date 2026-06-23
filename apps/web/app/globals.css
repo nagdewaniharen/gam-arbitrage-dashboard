@@ -57,6 +57,28 @@ html, body {
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-border-strong); }
 
+/* Native date input — the calendar picker icon ships dark by default
+ * and is invisible on our dark theme. Invert + brighten so it shows
+ * clearly, and grow the hit area a touch so it's obviously clickable. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85) brightness(1.4) opacity(0.9);
+  cursor: pointer;
+  padding: 4px;
+  margin-right: -4px;
+  border-radius: 4px;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  background: rgba(96, 165, 250, 0.15);
+  opacity: 1;
+}
+/* Firefox doesn't expose the picker indicator; the input itself becomes
+ * the click target there, so make it obviously interactive. */
+input[type="date"] {
+  color-scheme: dark;
+  cursor: pointer;
+}
+
 /* Card primitive — the foundation of every section */
 .card {
   background: var(--color-surface);
