@@ -58,22 +58,29 @@ html, body {
 ::-webkit-scrollbar-thumb:hover { background: var(--color-border-strong); }
 
 /* Native date input — the calendar picker icon ships dark by default
- * and is invisible on our dark theme. Invert + brighten so it shows
- * clearly, and grow the hit area a touch so it's obviously clickable. */
+ * and is invisible on our dark theme. Replace it with our own light-blue
+ * SVG icon via CSS so it's unmistakable and clearly clickable. */
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.85) brightness(1.4) opacity(0.9);
+  /* Hide the native icon, draw our own */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='18' rx='2' ry='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+  width: 22px;
+  height: 22px;
   cursor: pointer;
-  padding: 4px;
-  margin-right: -4px;
+  padding: 3px;
+  margin-right: -2px;
   border-radius: 4px;
-  transition: background 120ms ease, opacity 120ms ease;
+  opacity: 1;
+  transition: background-color 120ms ease;
 }
 input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  background: rgba(96, 165, 250, 0.15);
-  opacity: 1;
+  background-color: rgba(96, 165, 250, 0.2);
 }
-/* Firefox doesn't expose the picker indicator; the input itself becomes
- * the click target there, so make it obviously interactive. */
+/* Firefox doesn't expose the indicator pseudo; make the whole input
+ * clearly clickable. color-scheme:dark also makes the native fallback
+ * picker use our dark variants. */
 input[type="date"] {
   color-scheme: dark;
   cursor: pointer;
