@@ -207,7 +207,10 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
                 // Network-aggregate viewability + match-rate. These columns
                 // can't appear alongside LINE_ITEM_TYPE dim — run separately
                 // and merge by (date, ad_unit) in the runner.
-                'TOTAL_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
+                // Column names verified by scripts/gam-activeview-probe.ts:
+                // TOTAL_ACTIVE_VIEW_* doesn't exist on this network; the
+                // working column is AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE.
+                'AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE',
                 'AD_EXCHANGE_MATCH_RATE',
                 'TOTAL_AD_REQUESTS',
               ]
