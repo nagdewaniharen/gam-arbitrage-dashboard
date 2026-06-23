@@ -55,8 +55,8 @@ export function PeriodSelector({
               className={cn(
                 'px-3 py-1.5 text-xs font-medium rounded-md transition',
                 active
-                  ? 'bg-[--color-surface-2] text-[--color-text] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
-                  : 'text-[--color-text-dim] hover:text-[--color-text]',
+                  ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.15)]'
+                  : 'text-[--color-text-dim] hover:text-[--color-text] hover:bg-[--color-surface-2]/60',
               )}
             >
               {p.label}

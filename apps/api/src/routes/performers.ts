@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma, Prisma } from '@gam/db';
 import type { Dimension, PerformersResponse, PerformerRow, Period } from '@gam/types';
 import { VALID_DIMENSIONS } from '@gam/types';
-import { periodToDateRange } from '../lib/period.js';
+import { resolveDateRange } from '../lib/period.js';
 import { dimColumn, isValidDimension } from '../lib/dim.js';
 import { ok, err } from '../lib/responses.js';
 
@@ -16,7 +16,7 @@ interface RawPerformerRow {
 export async function performersRoutes(app: FastifyInstance) {
   app.get<{
     Params: { type: string };
-    Querystring: { period?: Period; by?: Dimension; limit?: number; minImpressions?: number };
+    Querystring: { period?: Period; from?: string; to?: string; by?: Dimension; limit?: number; minImpressions?: number };
   }>(
     '/performers/:type',
     {
@@ -51,7 +51,7 @@ export async function performersRoutes(app: FastifyInstance) {
       const period: Period = req.query.period ?? '7d';
       const limit = req.query.limit ?? 10;
       const minImpressions = req.query.minImpressions ?? 10;
-      const { from, to } = periodToDateRange(period);
+      const { from, to } = resolveDateRange(req.query);
       const col = Prisma.raw(dimColumn(by));
 
       let where = Prisma.empty;

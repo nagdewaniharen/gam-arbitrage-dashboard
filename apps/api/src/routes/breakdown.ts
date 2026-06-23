@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma, Prisma } from '@gam/db';
 import type { BreakdownResponse, BreakdownRow, Dimension, Period } from '@gam/types';
 import { VALID_DIMENSIONS } from '@gam/types';
-import { periodToDateRange } from '../lib/period.js';
+import { resolveDateRange } from '../lib/period.js';
 import { dimColumn, isValidDimension } from '../lib/dim.js';
 import { ok, err } from '../lib/responses.js';
 
@@ -16,7 +16,7 @@ interface RawRow {
 export async function breakdownRoutes(app: FastifyInstance) {
   app.get<{
     Params: { dimension: string };
-    Querystring: { period?: Period; limit?: number };
+    Querystring: { period?: Period; from?: string; to?: string; limit?: number };
   }>(
     '/breakdown/:dimension',
     {
@@ -44,7 +44,7 @@ export async function breakdownRoutes(app: FastifyInstance) {
       }
       const period: Period = req.query.period ?? '7d';
       const limit = req.query.limit ?? 50;
-      const { from, to } = periodToDateRange(period);
+      const { from, to } = resolveDateRange(req.query);
       const col = Prisma.raw(dimColumn(dimension as Dimension));
 
       let where = Prisma.empty;

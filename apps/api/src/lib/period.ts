@@ -29,6 +29,26 @@ export function periodToDateRange(period: Period): { from: Date | null; to: Date
   return { from: null, to };
 }
 
+/**
+ * Resolve a `?period=...` OR `?from=YYYY-MM-DD&to=YYYY-MM-DD` request into a
+ * { from, to } range. Custom dates take precedence over the period preset.
+ */
+export function resolveDateRange(args: {
+  period?: Period;
+  from?: string;
+  to?: string;
+}): { from: Date | null; to: Date | null; isCustom: boolean } {
+  if (args.from && args.to) {
+    const from = new Date(args.from + 'T00:00:00Z');
+    const to = new Date(args.to + 'T00:00:00Z');
+    if (!isNaN(from.getTime()) && !isNaN(to.getTime())) {
+      return { from, to, isCustom: true };
+    }
+  }
+  const r = periodToDateRange((args.period ?? '7d') as Period);
+  return { ...r, isCustom: false };
+}
+
 export function previousPeriodRange(period: Period): { from: Date | null; to: Date | null } {
   const { from, to } = periodToDateRange(period);
   if (!from || !to || period === 'all') return { from: null, to: null };

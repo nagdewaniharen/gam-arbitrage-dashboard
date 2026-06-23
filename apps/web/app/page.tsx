@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Dimension, Period } from '@gam/types';
-import { api } from '@/lib/api';
+import { api, type DateRange } from '@/lib/api';
 import { fmt } from '@/lib/format';
 import { Header } from '@/components/Header';
 import { KpiCard } from '@/components/KpiCard';
@@ -22,6 +22,10 @@ const NETWORK_CODE = process.env.NEXT_PUBLIC_NETWORK_CODE ?? '';
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>('7d');
+  const [customRange, setCustomRange] = useState<DateRange | null>(null);
+  // Stable cache key for queries — switches to date-bracketed key when
+  // a custom range is active so TanStack Query refetches correctly.
+  const periodKey = customRange ? `custom:${customRange.from}..${customRange.to}` : period;
 
   const [dimA, setDimA] = useState<Dimension>('campaign');
   // PRD §9.2 wireframe: right breakdown defaults to "Ad Unit"
@@ -35,31 +39,31 @@ export default function DashboardPage() {
   const [topMinImpr, setTopMinImpr] = useState<number>(10);
   const [bottomMinImpr, setBottomMinImpr] = useState<number>(10);
 
-  const stats = useQuery({ queryKey: ['stats', period], queryFn: () => api.stats(period) });
-  const trend = useQuery({ queryKey: ['trend', period], queryFn: () => api.trend(period) });
+  const stats = useQuery({ queryKey: ['stats', periodKey], queryFn: () => api.stats(period, customRange) });
+  const trend = useQuery({ queryKey: ['trend', periodKey], queryFn: () => api.trend(period, customRange) });
 
   const breakA = useQuery({
-    queryKey: ['breakdown', dimA, period],
-    queryFn: () => api.breakdown(dimA, period, 100),
+    queryKey: ['breakdown', dimA, periodKey],
+    queryFn: () => api.breakdown(dimA, period, 100, customRange),
   });
   const breakB = useQuery({
-    queryKey: ['breakdown', dimB, period],
-    queryFn: () => api.breakdown(dimB, period, 100),
+    queryKey: ['breakdown', dimB, periodKey],
+    queryFn: () => api.breakdown(dimB, period, 100, customRange),
   });
 
   const cross = useQuery({
-    queryKey: ['cross', crossDim1, crossDim2, period],
-    queryFn: () => api.cross(crossDim1, crossDim2, period, 500),
+    queryKey: ['cross', crossDim1, crossDim2, periodKey],
+    queryFn: () => api.cross(crossDim1, crossDim2, period, 500, customRange),
     enabled: crossDim1 !== crossDim2,
   });
 
   const top = useQuery({
-    queryKey: ['performers', 'top', topBy, period, topMinImpr],
-    queryFn: () => api.performers('top', topBy, period, 10),
+    queryKey: ['performers', 'top', topBy, periodKey, topMinImpr],
+    queryFn: () => api.performers('top', topBy, period, 10, customRange),
   });
   const bot = useQuery({
-    queryKey: ['performers', 'bottom', bottomBy, period, bottomMinImpr],
-    queryFn: () => api.performers('bottom', bottomBy, period, 10),
+    queryKey: ['performers', 'bottom', bottomBy, periodKey, bottomMinImpr],
+    queryFn: () => api.performers('bottom', bottomBy, period, 10, customRange),
   });
 
   const status = useQuery({ queryKey: ['status'], queryFn: () => api.status() });
@@ -82,6 +86,8 @@ export default function DashboardPage() {
       <Header
         period={period}
         onPeriodChange={setPeriod}
+        customRange={customRange}
+        onCustomRangeChange={setCustomRange}
         status={status.data}
         networkCode={NETWORK_CODE}
       />

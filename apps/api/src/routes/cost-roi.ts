@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma, Prisma } from '@gam/db';
 import type { Period } from '@gam/types';
-import { periodToDateRange } from '../lib/period.js';
+import { resolveDateRange } from '../lib/period.js';
 import { ok } from '../lib/responses.js';
 
 interface CostRoiRow {
@@ -26,7 +26,7 @@ interface RawJoinRow {
 }
 
 export async function costRoiRoutes(app: FastifyInstance) {
-  app.get<{ Querystring: { period?: Period; limit?: number } }>(
+  app.get<{ Querystring: { period?: Period; from?: string; to?: string; limit?: number } }>(
     '/cost-roi',
     {
       schema: {
@@ -44,7 +44,7 @@ export async function costRoiRoutes(app: FastifyInstance) {
     async (req) => {
       const period: Period = req.query.period ?? '30d';
       const limit = req.query.limit ?? 50;
-      const { from, to } = periodToDateRange(period);
+      const { from, to } = resolveDateRange(req.query);
 
       let dateClause = Prisma.empty;
       if (from && to) dateClause = Prisma.sql`AND date BETWEEN ${from} AND ${to}`;

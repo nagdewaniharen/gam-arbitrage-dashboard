@@ -28,14 +28,27 @@ async function get<T>(path: string): Promise<T> {
   return body.data;
 }
 
+export interface DateRange {
+  from: string; // YYYY-MM-DD
+  to: string;
+}
+
+/** Build a `?period=...` OR `?from=...&to=...` query string. */
+function rangeQuery(period: Period, range?: DateRange | null): string {
+  if (range) return `from=${range.from}&to=${range.to}`;
+  return `period=${period}`;
+}
+
 export const api = {
-  stats: (period: Period) => get<StatsResponse>(`/api/stats?period=${period}`),
-  trend: (period: Period) => get<TrendResponse>(`/api/trend?period=${period}`),
-  breakdown: (dim: Dimension, period: Period, limit = 25) =>
-    get<BreakdownResponse>(`/api/breakdown/${dim}?period=${period}&limit=${limit}`),
-  performers: (type: 'top' | 'bottom', by: Dimension, period: Period, limit = 10) =>
-    get<PerformersResponse>(`/api/performers/${type}?by=${by}&period=${period}&limit=${limit}`),
-  cross: (dim1: Dimension, dim2: Dimension, period: Period, limit = 100) =>
-    get<CrossResponse>(`/api/cross/${dim1}/${dim2}?period=${period}&limit=${limit}`),
+  stats: (period: Period, range?: DateRange | null) =>
+    get<StatsResponse>(`/api/stats?${rangeQuery(period, range)}`),
+  trend: (period: Period, range?: DateRange | null) =>
+    get<TrendResponse>(`/api/trend?${rangeQuery(period, range)}`),
+  breakdown: (dim: Dimension, period: Period, limit = 25, range?: DateRange | null) =>
+    get<BreakdownResponse>(`/api/breakdown/${dim}?${rangeQuery(period, range)}&limit=${limit}`),
+  performers: (type: 'top' | 'bottom', by: Dimension, period: Period, limit = 10, range?: DateRange | null) =>
+    get<PerformersResponse>(`/api/performers/${type}?by=${by}&${rangeQuery(period, range)}&limit=${limit}`),
+  cross: (dim1: Dimension, dim2: Dimension, period: Period, limit = 100, range?: DateRange | null) =>
+    get<CrossResponse>(`/api/cross/${dim1}/${dim2}?${rangeQuery(period, range)}&limit=${limit}`),
   status: () => get<StatusResponse>(`/api/status`),
 };

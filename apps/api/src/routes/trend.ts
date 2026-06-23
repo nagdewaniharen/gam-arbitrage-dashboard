@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma, Prisma } from '@gam/db';
 import type { Period, TrendPoint, TrendResponse } from '@gam/types';
-import { periodToDateRange } from '../lib/period.js';
+import { resolveDateRange } from '../lib/period.js';
 import { ok } from '../lib/responses.js';
 
 interface RawTrend {
@@ -12,7 +12,7 @@ interface RawTrend {
 }
 
 export async function trendRoutes(app: FastifyInstance) {
-  app.get<{ Querystring: { period?: Period } }>(
+  app.get<{ Querystring: { period?: Period; from?: string; to?: string } }>(
     '/trend',
     {
       schema: {
@@ -28,7 +28,7 @@ export async function trendRoutes(app: FastifyInstance) {
     },
     async (req) => {
       const period: Period = req.query.period ?? '30d';
-      const { from, to } = periodToDateRange(period);
+      const { from, to } = resolveDateRange(req.query);
 
       let where = Prisma.empty;
       if (from && to) where = Prisma.sql`WHERE date BETWEEN ${from} AND ${to}`;

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma, Prisma } from '@gam/db';
 import type { CrossResponse, CrossRow, Dimension, Period } from '@gam/types';
 import { VALID_DIMENSIONS } from '@gam/types';
-import { periodToDateRange } from '../lib/period.js';
+import { resolveDateRange } from '../lib/period.js';
 import { dimColumn, isValidDimension } from '../lib/dim.js';
 import { ok, err } from '../lib/responses.js';
 
@@ -17,7 +17,7 @@ interface RawCrossRow {
 export async function crossRoutes(app: FastifyInstance) {
   app.get<{
     Params: { dim1: string; dim2: string };
-    Querystring: { period?: Period; limit?: number };
+    Querystring: { period?: Period; from?: string; to?: string; limit?: number };
   }>(
     '/cross/:dim1/:dim2',
     {
@@ -53,7 +53,7 @@ export async function crossRoutes(app: FastifyInstance) {
       }
       const period: Period = req.query.period ?? '7d';
       const limit = req.query.limit ?? 200;
-      const { from, to } = periodToDateRange(period);
+      const { from, to } = resolveDateRange(req.query);
       const c1 = Prisma.raw(dimColumn(dim1 as Dimension));
       const c2 = Prisma.raw(dimColumn(dim2 as Dimension));
 

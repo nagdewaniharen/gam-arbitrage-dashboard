@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import type { Period, StatusResponse } from '@gam/types';
-import { PeriodSelector } from './PeriodSelector';
+import { PeriodSelector, type CustomRange } from './PeriodSelector';
 import { UserMenu } from './UserMenu';
 import { freshnessTier, relativeTime, formatIST } from '@/lib/time';
 import { cn } from '@/lib/cn';
@@ -14,11 +14,15 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 export function Header({
   period,
   onPeriodChange,
+  customRange,
+  onCustomRangeChange,
   status,
   networkCode,
 }: {
   period: Period;
   onPeriodChange: (p: Period) => void;
+  customRange?: CustomRange | null;
+  onCustomRangeChange?: (r: CustomRange | null) => void;
   status: StatusResponse | undefined;
   networkCode: string;
 }) {
@@ -95,7 +99,12 @@ export function Header({
           <RefreshCw size={12} className={refresh.isPending ? 'animate-spin' : ''} />
           {refresh.isPending ? 'Refreshing' : 'Refresh'}
         </button>
-        <PeriodSelector value={period} onChange={onPeriodChange} />
+        <PeriodSelector
+          value={period}
+          onChange={onPeriodChange}
+          customRange={customRange}
+          onCustomRangeChange={onCustomRangeChange}
+        />
         <UserMenu />
       </div>
       {toast ? (

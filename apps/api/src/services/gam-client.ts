@@ -141,7 +141,7 @@ export interface GamReportRunOptions {
    *     channels (Open Auction + Preferred Deals + Programmatic Guaranteed + direct).
    *     Matches the GAM UI "Programmatic channels" total.
    */
-  columnFamily?: 'ad_exchange' | 'total_line_item_level';
+  columnFamily?: 'ad_exchange' | 'total_line_item_level' | 'viewability_metrics';
 }
 
 export interface ParsedReportRow {
@@ -190,7 +190,7 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       // The 'ad_exchange' family stays available for arbitrage-focused analysis.
       const columnFamily = opts.columnFamily ?? 'total_line_item_level';
       const customKeys = parseCustomKeyIds();
-      const columnsXmlBlock =
+      const columnsXmlBlock = (
         columnFamily === 'total_line_item_level'
           ? [
               // Line-item-attributed metrics only — these are valid when the
@@ -202,18 +202,26 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
               'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
               'TOTAL_LINE_ITEM_LEVEL_AVERAGE_ECPM',
             ]
-              .map((c) => `<ns:columns>${c}</ns:columns>`)
-              .join('\n            ')
-          : [
-              'AD_EXCHANGE_IMPRESSIONS',
-              'AD_EXCHANGE_CLICKS',
-              'AD_EXCHANGE_REVENUE',
-              'AD_EXCHANGE_AVERAGE_ECPM',
-              'AD_EXCHANGE_RESPONSES_SERVED',
-              'AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
-            ]
-              .map((c) => `<ns:columns>${c}</ns:columns>`)
-              .join('\n            ');
+          : columnFamily === 'viewability_metrics'
+            ? [
+                // Network-aggregate viewability + match-rate. These columns
+                // can't appear alongside LINE_ITEM_TYPE dim — run separately
+                // and merge by (date, ad_unit) in the runner.
+                'TOTAL_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
+                'AD_EXCHANGE_MATCH_RATE',
+                'TOTAL_AD_REQUESTS',
+              ]
+            : [
+                'AD_EXCHANGE_IMPRESSIONS',
+                'AD_EXCHANGE_CLICKS',
+                'AD_EXCHANGE_REVENUE',
+                'AD_EXCHANGE_AVERAGE_ECPM',
+                'AD_EXCHANGE_RESPONSES_SERVED',
+                'AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
+              ]
+      )
+        .map((c) => `<ns:columns>${c}</ns:columns>`)
+        .join('\n            ');
 
       // Custom-targeting reporting is blocked at the GAM API level on this
       // network (ADR-018). Every combination tried returns

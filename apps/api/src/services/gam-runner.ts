@@ -61,7 +61,32 @@ export async function runRefresh(
   const start = Date.now();
   try {
     log.info(`gam.refresh: ${fromDate.toISOString()} → ${toDate.toISOString()}`);
-    const rows = await runGamReport({ fromDate, toDate }, log);
+    // Two GAM queries: (1) line-item-attributed totals matching GAM UI, and
+    // (2) network-aggregate viewability + match-rate. GAM rejects viewability
+    // columns when LINE_ITEM_TYPE dim is present, so they live in a separate
+    // call and we merge by (date, ad_unit) below.
+    const rowsCore: ParsedReportRow[] = await runGamReport(
+      { fromDate, toDate, columnFamily: 'total_line_item_level' },
+      log,
+    );
+    const rowsViewability: ParsedReportRow[] = await runGamReport(
+      { fromDate, toDate, columnFamily: 'viewability_metrics' },
+      log,
+    ).catch((e) => {
+      log.warn(`viewability query failed (non-fatal): ${(e as Error).message}`);
+      return [];
+    });
+    const viewabilityByKey = new Map<string, { viewability: number; matchRate: number }>();
+    for (const r of rowsViewability) {
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
+      viewabilityByKey.set(key, { viewability: r.viewability, matchRate: r.matchRate });
+    }
+    const rows = rowsCore.map((r) => {
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
+      const v = viewabilityByKey.get(key);
+      return v ? { ...r, viewability: v.viewability, matchRate: v.matchRate } : r;
+    });
+    log.info(`gam.refresh: merged ${rowsCore.length} core rows with ${rowsViewability.length} viewability rows`);
     // Clear existing rows in this date range before upserting. This keeps the
     // DB in sync with GAM's source of truth — if a (date, ad_unit) drops out
     // of the report (e.g., because column-family / dimension changes filtered
