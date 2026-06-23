@@ -1,21 +1,22 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { TrendPoint } from '@gam/types';
 import { fmt } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
 /**
  * PRD §9.3.3 — Daily Revenue Trend.
- * "Canvas-based or CSS bars (no heavy chart library needed)" — implemented
- * with pure CSS flex bars + a React-state hover tooltip. No Recharts.
+ * Raw SVG bar chart. Sharp at any size, matches the Recharts visual we had
+ * before, but zero library overhead (PRD "no heavy chart library needed").
  *
- * Above-average bars use full opacity in the revenue accent; below-average
- * bars dim to 50% so spikes pop visually. Hover any bar → tooltip shows
- * date, revenue, impressions, eCPM, clicks (PRD §9.3.3 tooltip contract).
+ * Hover any bar → tooltip with date / revenue / impressions / eCPM / clicks
+ * (PRD §9.3.3 tooltip contract). Above-/below-average bars colored
+ * differently. Y-axis "nice" ticks + dashed gridlines.
  */
 export function TrendChart({ points, loading }: { points: TrendPoint[]; loading?: boolean }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   const { avg, total, max } = useMemo(() => {
     if (points.length === 0) return { avg: 0, total: 0, max: 0 };
@@ -24,13 +25,22 @@ export function TrendChart({ points, loading }: { points: TrendPoint[]; loading?
     return { avg: sum / points.length, total: sum, max: m };
   }, [points]);
 
-  const yTicks = useMemo(() => {
-    if (max <= 0) return [0];
-    // Five evenly spaced ticks rounded to a clean value above max
-    const niceMax = niceUpper(max);
-    return [0, niceMax * 0.25, niceMax * 0.5, niceMax * 0.75, niceMax].map((v) => Math.round(v));
-  }, [max]);
-  const yMax = yTicks[yTicks.length - 1] ?? max;
+  const yMax = useMemo(() => niceUpper(max), [max]);
+  const yTicks = useMemo(() => [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(yMax * f)), [yMax]);
+
+  // SVG layout — viewBox uses logical 1000×400 units that scale via CSS.
+  const VBW = 1000;
+  const VBH = 400;
+  const PAD_L = 56;
+  const PAD_R = 12;
+  const PAD_T = 8;
+  const PAD_B = 28;
+  const innerW = VBW - PAD_L - PAD_R;
+  const innerH = VBH - PAD_T - PAD_B;
+
+  // Bar geometry — equal-width bands, 70% bar / 30% gap.
+  const band = points.length > 0 ? innerW / points.length : 0;
+  const barW = band * 0.7;
 
   return (
     <div className="card h-80">
@@ -49,6 +59,7 @@ export function TrendChart({ points, loading }: { points: TrendPoint[]; loading?
           ) : null}
         </div>
       </div>
+
       {loading ? (
         <div className="h-[82%] w-full rounded-md bg-[--color-surface-2] animate-pulse" />
       ) : points.length === 0 ? (
@@ -56,60 +67,105 @@ export function TrendChart({ points, loading }: { points: TrendPoint[]; loading?
           No data for this period
         </div>
       ) : (
-        <div className="relative h-[82%] flex pl-12 pr-1 pb-6 pt-1">
-          {/* Y-axis ticks + gridlines */}
-          <div className="absolute left-0 top-1 bottom-6 w-12 flex flex-col-reverse justify-between text-right pr-2 text-[10px] text-[--color-text-muted] font-mono-num">
-            {yTicks.map((t, i) => (
-              <span key={i} className="leading-none">
-                {t >= 1000 ? `$${(t / 1000).toFixed(1)}k` : `$${t}`}
-              </span>
-            ))}
-          </div>
-          <div className="absolute left-12 right-1 top-1 bottom-6 flex flex-col-reverse justify-between pointer-events-none">
-            {yTicks.map((_, i) => (
-              <div key={i} className="border-t border-dashed border-[--color-border]/60" />
-            ))}
-          </div>
+        <div ref={wrapRef} className="relative h-[82%] w-full">
+          <svg viewBox={`0 0 ${VBW} ${VBH}`} preserveAspectRatio="none" className="w-full h-full block">
+            {/* Gridlines */}
+            {yTicks.map((t, i) => {
+              const y = PAD_T + innerH - (t / yMax) * innerH;
+              return (
+                <line
+                  key={`grid-${i}`}
+                  x1={PAD_L}
+                  x2={VBW - PAD_R}
+                  y1={y}
+                  y2={y}
+                  stroke="var(--color-border)"
+                  strokeDasharray="3 6"
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                />
+              );
+            })}
 
-          {/* Bars */}
-          <div className="relative flex-1 flex items-end gap-1 sm:gap-2">
+            {/* Y-axis tick labels — fixed text size via vector-effect trick won't help, so we render text in screen-px after CSS scaling: use a separate HTML overlay below */}
+
+            {/* Bars */}
             {points.map((p, i) => {
-              const heightPct = yMax > 0 ? Math.max((p.revenue / yMax) * 100, p.revenue > 0 ? 1.5 : 0) : 0;
+              const x = PAD_L + i * band + (band - barW) / 2;
+              const h = yMax > 0 ? Math.max((p.revenue / yMax) * innerH, p.revenue > 0 ? 2 : 0) : 0;
+              const y = PAD_T + innerH - h;
+              const above = p.revenue >= avg;
               const isActive = hoverIdx === i;
+              const fill = above ? 'var(--color-accent-revenue)' : 'var(--color-accent-revenue)';
               return (
-                <div
-                  key={p.date}
-                  className="relative flex-1 flex flex-col items-center justify-end h-full group cursor-pointer"
-                  onMouseEnter={() => setHoverIdx(i)}
-                  onMouseLeave={() => setHoverIdx(null)}
-                >
-                  <div
-                    className={cn(
-                      'w-full rounded-t transition-all duration-150',
-                      isActive ? 'opacity-100 ring-1 ring-[--color-accent-revenue]/40' : '',
-                      p.revenue >= avg
-                        ? 'bg-[--color-accent-revenue]'
-                        : 'bg-[--color-accent-revenue]/45',
-                    )}
-                    style={{ height: `${heightPct}%`, minHeight: p.revenue > 0 ? 2 : 0 }}
+                <g key={p.date}>
+                  {/* Invisible wide hit-area for easier hover */}
+                  <rect
+                    x={PAD_L + i * band}
+                    y={PAD_T}
+                    width={band}
+                    height={innerH}
+                    fill="transparent"
+                    onMouseEnter={() => setHoverIdx(i)}
+                    onMouseLeave={() => setHoverIdx(null)}
                   />
-                </div>
+                  <rect
+                    x={x}
+                    y={y}
+                    width={barW}
+                    height={h}
+                    rx={4}
+                    ry={4}
+                    fill={fill}
+                    opacity={above ? (isActive ? 1 : 0.95) : isActive ? 0.7 : 0.45}
+                    style={{ transition: 'opacity 120ms ease' }}
+                  />
+                  {isActive ? (
+                    <rect
+                      x={x - 1}
+                      y={y - 1}
+                      width={barW + 2}
+                      height={h + 2}
+                      rx={5}
+                      ry={5}
+                      fill="none"
+                      stroke="var(--color-accent-revenue)"
+                      strokeOpacity={0.6}
+                      strokeWidth={1}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ) : null}
+                </g>
               );
             })}
-          </div>
+          </svg>
 
-          {/* X-axis date labels — show ~6 evenly spaced */}
-          <div className="absolute left-12 right-1 bottom-0 h-5 flex gap-1 sm:gap-2 pointer-events-none">
-            {points.map((p, i) => {
-              const skip = points.length > 8 && i % Math.ceil(points.length / 8) !== 0 && i !== points.length - 1;
-              const d = new Date(p.date);
-              const label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-              return (
-                <div key={p.date} className="flex-1 text-[10px] text-[--color-text-muted] text-center font-mono-num leading-none mt-1">
-                  {skip ? '' : label}
-                </div>
-              );
-            })}
+          {/* HTML overlay for axis labels — keeps text crisp (SVG text would distort with preserveAspectRatio="none") */}
+          <div className="pointer-events-none absolute inset-0">
+            {/* Y-axis labels */}
+            <div className="absolute left-0 top-2 bottom-7 w-[56px] flex flex-col-reverse justify-between text-right pr-2 text-[10px] text-[--color-text-muted] font-mono-num">
+              {yTicks.map((t, i) => (
+                <span key={i} className="leading-none">
+                  {t >= 1000 ? `$${(t / 1000).toFixed(1)}k` : `$${t}`}
+                </span>
+              ))}
+            </div>
+            {/* X-axis labels */}
+            <div className="absolute left-[56px] right-[12px] bottom-0 h-6 flex items-start">
+              {points.map((p, i) => {
+                const skip = points.length > 8 && i % Math.ceil(points.length / 8) !== 0 && i !== points.length - 1;
+                const d = new Date(p.date);
+                const label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+                return (
+                  <div
+                    key={p.date}
+                    className="flex-1 text-[10px] text-[--color-text-muted] text-center font-mono-num leading-none mt-1.5"
+                  >
+                    {skip ? '' : label}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Tooltip */}
@@ -130,13 +186,12 @@ function Tooltip({ point, idx, total }: { point: TrendPoint; idx: number; total:
     month: 'short',
     year: 'numeric',
   });
-  // Anchor right or left so the tooltip doesn't run off the chart edge
   const positionRight = idx > total / 2;
   return (
     <div
       className={cn(
-        'pointer-events-none absolute -top-2 z-10 rounded-lg border border-[--color-border-strong] bg-[--color-surface-3] px-3 py-2 text-xs shadow-2xl min-w-[180px]',
-        positionRight ? 'right-2' : 'left-14',
+        'pointer-events-none absolute -top-1 z-10 rounded-lg border border-[--color-border-strong] bg-[--color-surface-3] px-3 py-2 text-xs shadow-2xl min-w-[180px]',
+        positionRight ? 'right-2' : 'left-[60px]',
       )}
     >
       <div className="mb-1.5 text-[11px] font-medium text-[--color-text]">{dateLabel}</div>
