@@ -34,7 +34,10 @@ export function TrendChart({ points, loading }: { points: TrendPoint[]; loading?
   const PAD_L = 56;
   const PAD_R = 12;
   const PAD_T = 8;
-  const PAD_B = 28;
+  // PAD_B reserves space at the bottom of the SVG for the X-axis date
+  // labels (rendered as an HTML overlay below). Must be > the label height
+  // or bars visually overlap the dates.
+  const PAD_B = 60;
   const innerW = VBW - PAD_L - PAD_R;
   const innerH = VBH - PAD_T - PAD_B;
 
@@ -142,16 +145,16 @@ export function TrendChart({ points, loading }: { points: TrendPoint[]; loading?
 
           {/* HTML overlay for axis labels — keeps text crisp (SVG text would distort with preserveAspectRatio="none") */}
           <div className="pointer-events-none absolute inset-0">
-            {/* Y-axis labels */}
-            <div className="absolute left-0 top-2 bottom-7 w-[56px] flex flex-col-reverse justify-between text-right pr-2 text-[10px] text-[--color-text-muted] font-mono-num">
+            {/* Y-axis labels — align with SVG plot area (top: 2px / bottom: PAD_B-as-px ≈ 39px) */}
+            <div className="absolute left-0 top-1 w-[56px] flex flex-col-reverse justify-between text-right pr-2 text-[10px] text-[--color-text-muted] font-mono-num" style={{ bottom: '15%' }}>
               {yTicks.map((t, i) => (
                 <span key={i} className="leading-none">
                   {t >= 1000 ? `$${(t / 1000).toFixed(1)}k` : `$${t}`}
                 </span>
               ))}
             </div>
-            {/* X-axis labels */}
-            <div className="absolute left-[56px] right-[12px] bottom-0 h-6 flex items-start">
+            {/* X-axis labels — sit in the PAD_B band below the bars */}
+            <div className="absolute left-[56px] right-[12px] bottom-0 h-[12%] flex items-start">
               {points.map((p, i) => {
                 const skip = points.length > 8 && i % Math.ceil(points.length / 8) !== 0 && i !== points.length - 1;
                 const d = new Date(p.date);
@@ -159,7 +162,7 @@ export function TrendChart({ points, loading }: { points: TrendPoint[]; loading?
                 return (
                   <div
                     key={p.date}
-                    className="flex-1 text-[10px] text-[--color-text-muted] text-center font-mono-num leading-none mt-1.5"
+                    className="flex-1 text-[10px] text-[--color-text-muted] text-center font-mono-num leading-none mt-1"
                   >
                     {skip ? '' : label}
                   </div>
