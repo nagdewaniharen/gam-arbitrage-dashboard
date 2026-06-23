@@ -364,8 +364,15 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
           // for both line-item-attributed and unattributed traffic. Drop the
           // unattributed rows — that's what GAM UI's "Programmatic channels"
           // total filters out, and matching that view is the goal.
-          const lineItemType = r['dimension_line_item_type'] ?? r['line_item_type'] ?? '';
-          if (lineItemType === '' || lineItemType.toUpperCase() === 'UNKNOWN' || lineItemType.toUpperCase() === 'NULL') continue;
+          //
+          // BUT only apply this filter when LINE_ITEM_TYPE is actually a
+          // dimension of the report — other queries (e.g., viewability
+          // metrics) intentionally omit it, and we shouldn't drop their rows.
+          const hasLineItemTypeColumn = Object.keys(r).some((k) => k.toLowerCase().includes('line_item_type'));
+          if (hasLineItemTypeColumn) {
+            const lineItemType = r['dimension_line_item_type'] ?? r['line_item_type'] ?? '';
+            if (lineItemType === '' || lineItemType.toUpperCase() === 'UNKNOWN' || lineItemType.toUpperCase() === 'NULL') continue;
+          }
           // Column-name mapping decided by ADR-016. We accept both new (AD_EXCHANGE_*)
           // and legacy (LINE_ITEM_LEVEL_*) header names so existing CSV uploads work.
           // Revenue and eCPM are micros (1/1,000,000 of report currency).
@@ -406,18 +413,28 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
               r['column_ad_exchange_line_item_level_average_ecpm'] ??
               r['ecpm'] ?? 0,
             ) / 1_000_000,
-            viewability: Number(
-              r['column_total_active_view_percent_viewable_impressions'] ??
-              r['column_ad_exchange_active_view_percent_viewable_impressions'] ??
-              r['column_ad_exchange_active_view_viewable_impressions_rate'] ??
-              r['column_ad_exchange_line_item_level_percent_viewable_impressions'] ??
-              r['viewability'] ?? 0,
-            ) / 100,
-            matchRate: Number(
-              r['column_ad_exchange_match_rate'] ??
-              r['column_ad_exchange_line_item_level_match_rate'] ??
-              r['match_rate'] ?? 0,
-            ) / 100,
+            // Auto-detect scale: GAM v202511 returns rates as 0-1 fractions
+            // for TOTAL_* / ADX_* columns but the legacy LINE_ITEM_LEVEL_*
+            // columns + CSV uploads use 0-100. Anything > 1 → assume the
+            // legacy percentage form and normalize back into 0-1 land.
+            viewability: (() => {
+              const v = Number(
+                r['column_total_active_view_percent_viewable_impressions'] ??
+                r['column_ad_exchange_active_view_percent_viewable_impressions'] ??
+                r['column_ad_exchange_active_view_viewable_impressions_rate'] ??
+                r['column_ad_exchange_line_item_level_percent_viewable_impressions'] ??
+                r['viewability'] ?? 0,
+              );
+              return v > 1 ? v / 100 : v;
+            })(),
+            matchRate: (() => {
+              const v = Number(
+                r['column_ad_exchange_match_rate'] ??
+                r['column_ad_exchange_line_item_level_match_rate'] ??
+                r['match_rate'] ?? 0,
+              );
+              return v > 1 ? v / 100 : v;
+            })(),
           });
         }
         // Aggregate by (date, ad_unit) — when LINE_ITEM_TYPE dimension is
