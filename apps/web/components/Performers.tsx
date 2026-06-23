@@ -35,17 +35,20 @@ export function Performers({
   loading?: boolean;
 }) {
   const accent = variant === 'top' ? 'text-[--color-success]' : 'text-[--color-danger]';
-  // PRD §10.3.5 — make the variant unmistakable: thick colored top band
-  // + matching translucent background tint so Top vs Bottom reads instantly.
-  const variantStyles = variant === 'top'
-    ? 'border-t-4 border-t-[--color-success] bg-[--color-success]/[0.04]'
-    : 'border-t-4 border-t-[--color-danger] bg-[--color-danger]/[0.04]';
+  // PRD §10.3.5 — make the variant unmistakable. Use inline styles for
+  // border + bg because Tailwind 4 arbitrary CSS-var classes get stripped
+  // by tailwind-merge in some combinations.
+  const variantColor = variant === 'top' ? '#10b981' : '#ef4444';
+  const variantStyle = {
+    borderTop: `4px solid ${variantColor}`,
+    background: variant === 'top' ? 'rgba(16,185,129,0.05)' : 'rgba(239,68,68,0.05)',
+  };
   const Icon = variant === 'top' ? TrendingUp : TrendingDown;
   const label = variant === 'top' ? 'Top 10 by eCPM' : 'Bottom 10 by eCPM';
   const dims = VALID_DIMENSIONS.filter((d) => d !== 'date');
 
   return (
-    <div className={cn('card', variantStyles)}>
+    <div className="card" style={variantStyle}>
       <div className="flex items-center justify-between mb-3 gap-3">
         <div className={cn('inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.14em]', accent)}>
           <Icon size={12} />
