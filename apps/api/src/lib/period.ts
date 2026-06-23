@@ -1,11 +1,14 @@
 import type { Period } from '@gam/types';
 
 /**
- * Returns { from, to } as YYYY-MM-DD strings in the GAM report timezone (IST).
- * `today` = today only
- * `7d`    = last 7 days inclusive of today
- * `30d`   = last 30 days inclusive of today
- * `all`   = null bounds → caller should treat as no-filter
+ * Returns { from, to } in the GAM report timezone (IST).
+ *
+ * Window conventions match GAM Ad Manager UI exactly (which always ends
+ * windows yesterday because today is incomplete):
+ *   `today` = today only (the one period that DOES include today)
+ *   `7d`    = last 7 complete days ending yesterday
+ *   `30d`   = last 30 complete days ending yesterday
+ *   `all`   = null bounds → caller treats as no-filter
  */
 export function periodToDateRange(period: Period): { from: Date | null; to: Date | null } {
   const today = new Date();
@@ -13,20 +16,24 @@ export function periodToDateRange(period: Period): { from: Date | null; to: Date
 
   if (period === 'all') return { from: null, to: today };
 
-  const to = today;
-  const from = new Date(today);
   if (period === 'today') {
-    return { from: to, to };
+    return { from: today, to: today };
   }
+
+  // Multi-day windows end YESTERDAY (today is partial). This is how GAM UI
+  // computes its "Last 7 days" / "Last 30 days" tabs.
+  const yesterday = new Date(today);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const from = new Date(yesterday);
   if (period === '7d') {
-    from.setUTCDate(from.getUTCDate() - 6);
-    return { from, to };
+    from.setUTCDate(from.getUTCDate() - 6); // yesterday + 6 days back = 7 total
+    return { from, to: yesterday };
   }
   if (period === '30d') {
-    from.setUTCDate(from.getUTCDate() - 29);
-    return { from, to };
+    from.setUTCDate(from.getUTCDate() - 29); // yesterday + 29 days back = 30 total
+    return { from, to: yesterday };
   }
-  return { from: null, to };
+  return { from: null, to: yesterday };
 }
 
 /**
