@@ -14,7 +14,7 @@ env:
 
 jobs:
   deploy-api:
-    name: Build + push API image, deploy App Runner
+    name: Build + push API image
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -42,22 +42,3 @@ jobs:
           tags: |
             ${{ steps.ecr.outputs.registry }}/gam-arbitrage-api:latest
             ${{ steps.ecr.outputs.registry }}/gam-arbitrage-api:${{ github.sha }}
-
-
-  deploy-web:
-    name: Trigger Amplify build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: Start Amplify deployment
-        run: |
-          aws amplify start-job \
-            --app-id "${{ secrets.AMPLIFY_APP_ID }}" \
-            --branch-name main \
-            --job-type RELEASE
