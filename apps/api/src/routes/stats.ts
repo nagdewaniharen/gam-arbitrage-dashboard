@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma, Prisma } from '@gam/db';
 import type { Period, StatsResponse } from '@gam/types';
-import { periodToDateRange, previousPeriodRange, resolveDateRange } from '../lib/period.js';
+import { previousPeriodRange, resolveDateRange } from '../lib/period.js';
 import { ok } from '../lib/responses.js';
 
 interface TotalsRow {
