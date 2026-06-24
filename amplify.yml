@@ -4,11 +4,12 @@ applications:
       phases:
         preBuild:
           commands:
-            - npx pnpm install
-            - npx pnpm --filter @gam/db generate
+            - npm install -g pnpm@9
+            - pnpm install
+            - pnpm --filter @gam/db generate
         build:
           commands:
-            - npx turbo run build --filter=@gam/web
+            - pnpm --filter @gam/web build
       artifacts:
         baseDirectory: apps/web/.next
         files:
