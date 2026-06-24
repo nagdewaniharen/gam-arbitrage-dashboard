@@ -11,7 +11,7 @@ applications:
           commands:
             - pnpm --filter @gam/web build
       artifacts:
-        baseDirectory: apps/web/.next
+        baseDirectory: .next
         files:
           - '**/*'
       cache:
