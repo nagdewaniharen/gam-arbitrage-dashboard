@@ -29,10 +29,14 @@ export function PeriodSelector({
   onCustomRangeChange?: (r: CustomRange | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // Local-date today (not UTC) so the cap matches what the user's clock shows.
+  // GAM has no future data, so future dates must be unselectable.
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const [from, setFrom] = useState(customRange?.from ?? todayStr);
   const [to, setTo] = useState(customRange?.to ?? todayStr);
   const customActive = !!customRange;
+  const rangeInvalid = from > to;
 
   return (
     <div className="relative inline-flex items-center gap-1">
@@ -86,20 +90,40 @@ export function PeriodSelector({
           <div className="flex flex-col gap-2">
             <label className="text-xs text-[--color-text-dim]">
               From
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="input mt-1 w-full" />
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                max={to || todayStr}
+                className="input mt-1 w-full"
+              />
             </label>
             <label className="text-xs text-[--color-text-dim]">
               To
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input mt-1 w-full" />
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                min={from}
+                max={todayStr}
+                className="input mt-1 w-full"
+              />
             </label>
+            {rangeInvalid ? (
+              <div className="text-[11px] text-[--color-danger]">From must be on or before To.</div>
+            ) : null}
             <div className="flex items-center gap-2 mt-1">
               <button
                 type="button"
+                disabled={rangeInvalid}
                 onClick={() => {
                   onCustomRangeChange?.({ from, to });
                   setOpen(false);
                 }}
-                className="text-xs px-3 py-1.5 rounded-md border border-[--color-border] bg-[--color-surface-2] hover:bg-[--color-surface-hover] transition"
+                className={cn(
+                  'text-xs px-3 py-1.5 rounded-md border border-[--color-border] bg-[--color-surface-2] hover:bg-[--color-surface-hover] transition',
+                  rangeInvalid && 'opacity-50 cursor-not-allowed hover:bg-[--color-surface-2]',
+                )}
               >
                 Apply
               </button>
