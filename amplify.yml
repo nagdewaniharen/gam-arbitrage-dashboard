@@ -10,8 +10,10 @@ applications:
         build:
           commands:
             - pnpm --filter @gam/web build
+            - cp -r .next/static .next/standalone/apps/web/.next/static
+            - cp -r public .next/standalone/apps/web/public
       artifacts:
-        baseDirectory: .next
+        baseDirectory: .next/standalone
         files:
           - '**/*'
       cache:
