@@ -1,27 +1,21 @@
 version: 1
-frontend:
-  phases:
-    preBuild:
-      commands:
-        # Amplify defaults to npm; this project uses pnpm in a turbo monorepo.
-        - nvm use 20 || nvm install 20
-        - npm install -g pnpm@9.12.0
-        # Run install from the repo root so the whole workspace resolves
-        # (@gam/db and @gam/types are workspace deps). The Amplify app root is
-        # apps/web, so step up to the monorepo root for the install.
-        - cd ../.. && pnpm install --frozen-lockfile
-        # Generate the Prisma client BEFORE building, or the build throws
-        # "@prisma/client does not provide an export named 'PrismaClient'".
-        - cd ../.. && pnpm --filter @gam/db generate
-    build:
-      commands:
-        - cd ../.. && pnpm --filter @gam/web build
-  artifacts:
-    # Paths are relative to the app root (apps/web), so .next is apps/web/.next.
-    baseDirectory: .next
-    files:
-      - '**/*'
-  cache:
-    paths:
-      - .next/cache/**/*
-      - ../../node_modules/**/*
+applications:
+  - frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm install -g pnpm@9
+            - pnpm install
+            - pnpm --filter @gam/db generate
+        build:
+          commands:
+            - pnpm --filter @gam/web build
+      artifacts:
+        baseDirectory: apps/web/.next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - .next/cache/**/*
+          - node_modules/**/*
+    appRoot: apps/web
