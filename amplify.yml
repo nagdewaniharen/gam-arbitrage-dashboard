@@ -8,7 +8,7 @@ applications:
             - npx pnpm --filter @gam/db generate
         build:
           commands:
-            - npx turbo run build --filter=web
+            - npx turbo run build --filter=@gam/web
       artifacts:
         baseDirectory: apps/web/.next
         files:
