@@ -178,7 +178,7 @@ function SortHeader({
   align: 'left' | 'right';
   sortKey: SortKey;
   dir: SortDir;
-  onClick: (k: SortKey) => void;
+  onClick: (_k: SortKey) => void;
 }) {
   const active = sortKey === k;
   return (

@@ -28,9 +28,9 @@ export function Performers({
 }: {
   variant: 'top' | 'bottom';
   by: Dimension;
-  onByChange: (d: Dimension) => void;
+  onByChange: (_d: Dimension) => void;
   minImpressions: number;
-  onMinImpressionsChange: (n: number) => void;
+  onMinImpressionsChange: (_n: number) => void;
   rows: PerformerRow[];
   loading?: boolean;
 }) {

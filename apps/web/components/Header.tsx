@@ -20,9 +20,9 @@ export function Header({
   networkCode,
 }: {
   period: Period;
-  onPeriodChange: (p: Period) => void;
+  onPeriodChange: (_p: Period) => void;
   customRange?: CustomRange | null;
-  onCustomRangeChange?: (r: CustomRange | null) => void;
+  onCustomRangeChange?: (_r: CustomRange | null) => void;
   status: StatusResponse | undefined;
   networkCode: string;
 }) {

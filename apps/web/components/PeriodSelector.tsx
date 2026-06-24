@@ -24,9 +24,9 @@ export function PeriodSelector({
   onCustomRangeChange,
 }: {
   value: Period;
-  onChange: (p: Period) => void;
+  onChange: (_p: Period) => void;
   customRange?: CustomRange | null;
-  onCustomRangeChange?: (r: CustomRange | null) => void;
+  onCustomRangeChange?: (_r: CustomRange | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   // Local-date today (not UTC) so the cap matches what the user's clock shows.
