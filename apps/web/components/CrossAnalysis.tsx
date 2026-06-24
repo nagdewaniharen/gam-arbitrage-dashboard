@@ -32,8 +32,8 @@ export function CrossAnalysis({
   dim1: Dimension;
   dim2: Dimension;
   rows: CrossRow[];
-  onDim1Change: (d: Dimension) => void;
-  onDim2Change: (d: Dimension) => void;
+  onDim1Change: (_d: Dimension) => void;
+  onDim2Change: (_d: Dimension) => void;
   loading?: boolean;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('revenue');
@@ -200,7 +200,7 @@ function SortHeader({
   align: 'left' | 'right';
   sortKey: SortKey;
   dir: SortDir;
-  onClick: (k: SortKey) => void;
+  onClick: (_k: SortKey) => void;
 }) {
   const active = sortKey === k;
   return (

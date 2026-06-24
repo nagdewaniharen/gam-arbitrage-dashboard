@@ -101,7 +101,7 @@ export function CompareDates() {
   );
 }
 
-function DateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function DateField({ label, value, onChange }: { label: string; value: string; onChange: (_v: string) => void }) {
   return (
     <label className="text-[10px] uppercase tracking-[0.14em] text-[--color-text-muted]">
       {label}

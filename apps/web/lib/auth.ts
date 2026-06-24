@@ -24,7 +24,7 @@ const BOOTSTRAP_ADMIN = (process.env.BOOTSTRAP_ADMIN_EMAIL ?? '').toLowerCase();
 
 if (process.env.GOOGLE_OAUTH_CLIENT_ID && !ALLOWED_DOMAIN) {
   // Refuse to start SSO without a domain gate — that would let anyone log in.
-  // eslint-disable-next-line no-console
+   
   console.error(
     '[auth] FATAL: GOOGLE_OAUTH_CLIENT_ID is set but ALLOWED_GOOGLE_DOMAIN is empty.\n' +
       'Set ALLOWED_GOOGLE_DOMAIN to your Workspace domain or unset GOOGLE_OAUTH_CLIENT_ID.',
@@ -37,7 +37,7 @@ if (process.env.GOOGLE_OAUTH_CLIENT_ID && !ALLOWED_DOMAIN) {
 // JWT-only sessions (ADR-013): no Prisma adapter — the User table is the
 // only one we maintain, and we upsert it manually in the signIn callback.
 // PrismaAdapter would expect Account/Session/VerificationToken tables too.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const _nextAuth: any = NextAuth({
   session: { strategy: 'jwt', maxAge: 7 * 24 * 60 * 60 },
   trustHost: true,
@@ -56,7 +56,7 @@ const _nextAuth: any = NextAuth({
     }),
   ],
   callbacks: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     async signIn({ user, profile }: any) {
       if (!user.email) return false;
       const email = user.email.toLowerCase();
@@ -91,7 +91,7 @@ const _nextAuth: any = NextAuth({
       }
       return true;
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     async jwt({ token, user }: any) {
       const email = (user?.email ?? token.email ?? '').toLowerCase();
       if (email) {
@@ -103,7 +103,7 @@ const _nextAuth: any = NextAuth({
       }
       return token;
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     async session({ session, token }: any) {
       session.role = token.role ?? 'user';
       session.isActive = token.isActive ?? true;

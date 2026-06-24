@@ -32,7 +32,7 @@ export function BreakdownTable({
 }: {
   dim: Dimension;
   rows: BreakdownRow[];
-  onDimChange: (d: Dimension) => void;
+  onDimChange: (_d: Dimension) => void;
   loading?: boolean;
   ecpmHi?: number;
   ecpmLo?: number;
@@ -166,7 +166,7 @@ function SortHeader({
   align: 'left' | 'right';
   sortKey: SortKey;
   dir: SortDir;
-  onClick: (k: SortKey) => void;
+  onClick: (_k: SortKey) => void;
 }) {
   const active = sortKey === k;
   return (
