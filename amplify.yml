@@ -12,8 +12,9 @@ applications:
             - pnpm --filter @gam/web build
             - cp -r .next/static .next/standalone/apps/web/.next/static
             - cp -r public .next/standalone/apps/web/public
+            - cp -r .next/standalone/node_modules/. .next/standalone/apps/web/node_modules/
       artifacts:
-        baseDirectory: .next/standalone
+        baseDirectory: .next/standalone/apps/web
         files:
           - '**/*'
       cache:
