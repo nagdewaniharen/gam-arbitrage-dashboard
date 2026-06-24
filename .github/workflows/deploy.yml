@@ -40,12 +40,9 @@ jobs:
           file: apps/api/Dockerfile
           push: true
           tags: |
-            ${{ steps.ecr.outputs.registry }}/gam-api:latest
-            ${{ steps.ecr.outputs.registry }}/gam-api:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/gam-arbitrage-api:latest
+            ${{ steps.ecr.outputs.registry }}/gam-arbitrage-api:${{ github.sha }}
 
-      - name: Trigger App Runner deployment
-        run: |
-          aws apprunner start-deployment --service-arn "${{ secrets.APP_RUNNER_API_ARN }}"
 
   deploy-web:
     name: Trigger Amplify build
