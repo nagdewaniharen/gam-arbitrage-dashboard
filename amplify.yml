@@ -11,6 +11,7 @@ applications:
             - pnpm --filter @gam/db build
         build:
           commands:
+            - env | grep -e API_PROXY_URL >> apps/web/.env.production
             - pnpm --filter @gam/web build
       artifacts:
         baseDirectory: .next
