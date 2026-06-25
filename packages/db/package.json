@@ -21,7 +21,7 @@
     "studio": "prisma studio",
     "format": "prisma format",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && cp -R src/generated dist/generated",
     "lint": "echo 'no-op'",
     "clean": "rm -rf dist node_modules .turbo"
   },

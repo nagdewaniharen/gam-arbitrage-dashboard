@@ -19,8 +19,6 @@ COPY . .
 RUN pnpm --filter @gam/db generate
 RUN pnpm --filter @gam/types build
 RUN pnpm --filter @gam/db build
-# Prisma's generated client is plain JS — tsc won't emit it into dist, so copy it in
-RUN cp -R packages/db/src/generated packages/db/dist/generated
 RUN pnpm --filter @gam/api build
 RUN pnpm --filter @gam/api deploy --prod /app/deploy
 # ---- run ----
