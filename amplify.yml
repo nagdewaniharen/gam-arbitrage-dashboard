@@ -7,6 +7,8 @@ applications:
             - npm install -g pnpm@9
             - pnpm install
             - pnpm --filter @gam/db generate
+            - pnpm --filter @gam/types build
+            - pnpm --filter @gam/db build
         build:
           commands:
             - pnpm --filter @gam/web build
