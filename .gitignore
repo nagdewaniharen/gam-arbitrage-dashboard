@@ -54,3 +54,6 @@ storybook-static/
 .cache/
 .tmp/
 tmp/
+
+# Prisma generated client (built at image time)
+packages/db/src/generated/
