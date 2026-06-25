@@ -53,7 +53,7 @@ async function loadRefreshToken(): Promise<string> {
   } catch (e) {
     throw new Error(
       `GAM OAuth refresh token not available. Either set GAM_USER_OAUTH_REFRESH_TOKEN or run ` +
-        `\`pnpm --filter @gam/api auth:gam\` to produce ${REFRESH_TOKEN_PATH}. Original: ${(e as Error).message}`,
+      `\`pnpm --filter @gam/api auth:gam\` to produce ${REFRESH_TOKEN_PATH}. Original: ${(e as Error).message}`,
     );
   }
 }
@@ -193,35 +193,35 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       const columnsXmlBlock = (
         columnFamily === 'total_line_item_level'
           ? [
-              // Line-item-attributed metrics only — these are valid when the
-              // LINE_ITEM_TYPE dimension is requested. TOTAL_AD_REQUESTS and
-              // network-level active-view columns are NOT valid at line-item
-              // granularity (GAM throws COLUMNS_NOT_SUPPORTED_FOR_REQUESTED_DIMENSIONS).
-              'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
-              'TOTAL_LINE_ITEM_LEVEL_CLICKS',
-              'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
-              'TOTAL_LINE_ITEM_LEVEL_AVERAGE_ECPM',
-            ]
+            // Line-item-attributed metrics only — these are valid when the
+            // LINE_ITEM_TYPE dimension is requested. TOTAL_AD_REQUESTS and
+            // network-level active-view columns are NOT valid at line-item
+            // granularity (GAM throws COLUMNS_NOT_SUPPORTED_FOR_REQUESTED_DIMENSIONS).
+            'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+            'TOTAL_LINE_ITEM_LEVEL_CLICKS',
+            'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+            'TOTAL_LINE_ITEM_LEVEL_AVERAGE_ECPM',
+          ]
           : columnFamily === 'viewability_metrics'
             ? [
-                // Network-aggregate viewability + match-rate. These columns
-                // can't appear alongside LINE_ITEM_TYPE dim — run separately
-                // and merge by (date, ad_unit) in the runner.
-                // Column names verified by scripts/gam-activeview-probe.ts:
-                // TOTAL_ACTIVE_VIEW_* doesn't exist on this network; the
-                // working column is AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE.
-                'AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE',
-                'AD_EXCHANGE_MATCH_RATE',
-                'TOTAL_AD_REQUESTS',
-              ]
+              // Network-aggregate viewability + match-rate. These columns
+              // can't appear alongside LINE_ITEM_TYPE dim — run separately
+              // and merge by (date, ad_unit) in the runner.
+              // Column names verified by scripts/gam-activeview-probe.ts:
+              // TOTAL_ACTIVE_VIEW_* doesn't exist on this network; the
+              // working column is AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE.
+              'AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE',
+              'AD_EXCHANGE_MATCH_RATE',
+              'TOTAL_AD_REQUESTS',
+            ]
             : [
-                'AD_EXCHANGE_IMPRESSIONS',
-                'AD_EXCHANGE_CLICKS',
-                'AD_EXCHANGE_REVENUE',
-                'AD_EXCHANGE_AVERAGE_ECPM',
-                'AD_EXCHANGE_RESPONSES_SERVED',
-                'AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
-              ]
+              'AD_EXCHANGE_IMPRESSIONS',
+              'AD_EXCHANGE_CLICKS',
+              'AD_EXCHANGE_REVENUE',
+              'AD_EXCHANGE_AVERAGE_ECPM',
+              'AD_EXCHANGE_RESPONSES_SERVED',
+              'AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
+            ]
       )
         .map((c) => `<ns:columns>${c}</ns:columns>`)
         .join('\n            ');
@@ -409,13 +409,22 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
               r['column_ad_exchange_line_item_level_revenue'] ??
               r['revenue'] ?? 0,
             ) / 1_000_000,
-            ecpm: Number(
-              r['column_total_line_item_level_average_ecpm'] ??
-              r['column_ad_server_average_ecpm'] ??
-              r['column_ad_exchange_average_ecpm'] ??
-              r['column_ad_exchange_line_item_level_average_ecpm'] ??
-              r['ecpm'] ?? 0,
-            ) / 1_000_000,
+            //new row gets a real eCPM
+            ecpm: (() => {
+              const impr = Math.floor(Number(
+                r['column_ad_server_impressions'] ??
+                r['column_ad_exchange_impressions'] ??
+                r['column_ad_exchange_line_item_level_impressions'] ??
+                r['impressions'] ?? 0,
+              ));
+              const rev = Number(
+                r['column_ad_server_cpm_and_cpc_revenue'] ??
+                r['column_ad_exchange_revenue'] ??
+                r['column_ad_exchange_line_item_level_revenue'] ??
+                r['revenue'] ?? 0,
+              ) / 1_000_000;
+              return impr > 0 ? (rev / impr) * 1000 : 0;
+            })(),
             // Auto-detect scale: GAM v202511 returns rates as 0-1 fractions
             // for TOTAL_* / ADX_* columns but the legacy LINE_ITEM_LEVEL_*
             // columns + CSV uploads use 0-100. Anything > 1 → assume the
