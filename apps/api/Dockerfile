@@ -33,4 +33,4 @@ COPY --from=build --chown=app:app /app/packages/types ./packages/types
 COPY --from=build --chown=app:app /app/apps/api/package.json ./package.json
 USER app
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/apps/api/src/server.js"]
