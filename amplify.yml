@@ -11,7 +11,7 @@ applications:
             - pnpm --filter @gam/db build
         build:
           commands:
-            - env | grep -E '^(AUTH_SECRET|NEXTAUTH_SECRET|NEXTAUTH_URL|GOOGLE_OAUTH_CLIENT_ID|GOOGLE_OAUTH_CLIENT_SECRET|ALLOWED_GOOGLE_DOMAIN|BOOTSTRAP_ADMIN_EMAIL|DATABASE_URL)=' > .env.production || true
+            - env | grep -E '^(AUTH_SECRET|NEXTAUTH_SECRET|AUTH_URL|NEXTAUTH_URL|AUTH_TRUST_HOST|GOOGLE_OAUTH_CLIENT_ID|GOOGLE_OAUTH_CLIENT_SECRET|ALLOWED_GOOGLE_DOMAIN|BOOTSTRAP_ADMIN_EMAIL|DATABASE_URL)=' > .env.production || true
             - echo "--- .env.production var names (values hidden) ---"
             - cut -d= -f1 .env.production
             - pnpm --filter @gam/web build
