@@ -1,15 +1,21 @@
-console.log('[ENV-CHECK]',
-  'CLIENT_ID:', process.env.GOOGLE_OAUTH_CLIENT_ID ? 'SET(' + process.env.GOOGLE_OAUTH_CLIENT_ID.length + ')' : 'EMPTY',
-  'CLIENT_SECRET:', process.env.GOOGLE_OAUTH_CLIENT_SECRET ? 'SET' : 'EMPTY',
-  'AUTH_SECRET:', process.env.AUTH_SECRET ? 'SET' : 'EMPTY',
-  'NEXTAUTH_SECRET:', process.env.NEXTAUTH_SECRET ? 'SET' : 'EMPTY',
-  'AUTH_URL:', process.env.AUTH_URL || 'EMPTY',
-  'NEXTAUTH_URL:', process.env.NEXTAUTH_URL || 'EMPTY',
-);
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Prisma's query-engine .node binary isn't traced by Next's bundler by
+  // default. Keep Prisma external and explicitly include the generated client
+  // (engine binaries) in the server output trace so Amplify's Lambda runtime
+  // can locate the RHEL engine.
+  serverExternalPackages: ['@prisma/client', '@gam/db'],
+  outputFileTracingIncludes: {
+    '/**': [
+      '../../packages/db/src/generated/client/**/*.node',
+    ],
+  },
   env: {
     GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID,
     GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
