@@ -412,12 +412,14 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             //new row gets a real eCPM
             ecpm: (() => {
               const impr = Math.floor(Number(
+                r['column_total_line_item_level_impressions'] ??
                 r['column_ad_server_impressions'] ??
                 r['column_ad_exchange_impressions'] ??
                 r['column_ad_exchange_line_item_level_impressions'] ??
                 r['impressions'] ?? 0,
               ));
               const rev = Number(
+                r['column_total_line_item_level_cpm_and_cpc_revenue'] ??
                 r['column_ad_server_cpm_and_cpc_revenue'] ??
                 r['column_ad_exchange_revenue'] ??
                 r['column_ad_exchange_line_item_level_revenue'] ??
