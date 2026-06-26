@@ -4,13 +4,29 @@ applications:
       phases:
         preBuild:
           commands:
-            - npx pnpm install
-            - npx pnpm --filter @gam/db generate
+            - npm install -g pnpm@9
+            - pnpm install
+            - pnpm --filter @gam/db generate
+            - pnpm --filter @gam/types build
+            - pnpm --filter @gam/db build
         build:
           commands:
-            - npx turbo run build --filter=@gam/web
+            - env | grep -E '^(AUTH_SECRET|NEXTAUTH_SECRET|AUTH_URL|NEXTAUTH_URL|AUTH_TRUST_HOST|GOOGLE_OAUTH_CLIENT_ID|GOOGLE_OAUTH_CLIENT_SECRET|ALLOWED_GOOGLE_DOMAIN|BOOTSTRAP_ADMIN_EMAIL|DATABASE_URL)=' > .env.production || true
+            - pnpm --filter @gam/web build
+            # Prisma engine ko HAR woh jagah copy karo jahan runtime dhoondhta hai
+            - mkdir -p .next/server
+            - cp ../../packages/db/src/generated/client/*.node .next/server/ || true
+            - mkdir -p .next/server/src/generated/client
+            - cp ../../packages/db/src/generated/client/*.node .next/server/src/generated/client/ || true
+            - mkdir -p .prisma/client
+            - cp ../../packages/db/src/generated/client/*.node .prisma/client/ || true
+            - mkdir -p .next/standalone/.prisma/client
+            - cp ../../packages/db/src/generated/client/*.node .next/standalone/.prisma/client/ 2>/dev/null || true
+            - echo "--- engine copied to all locations ---"
+            - ls -la .next/server/*.node || true
+            - ls -la .prisma/client/*.node || true
       artifacts:
-        baseDirectory: apps/web/.next
+        baseDirectory: .next
         files:
           - '**/*'
       cache:
