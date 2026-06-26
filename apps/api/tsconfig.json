@@ -2,11 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "../..",
+    "rootDir": "src",
     "paths": {
-      "@gam/db": ["../../packages/db/src"],
-      "@gam/types": ["../../packages/types/src"]
+      "@gam/db": ["../../packages/db/dist"],
+      "@gam/types": ["../../packages/types/dist"]
     }
   },
-  "include": ["src/**/*", "../../packages/db/src/**/*", "../../packages/types/src/**/*"]
+  "include": ["src/**/*"]
 }

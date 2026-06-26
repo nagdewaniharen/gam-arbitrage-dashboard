@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/.git
+**/*.log
+**/.env
+**/.env.*
+**/secrets/
+deploy

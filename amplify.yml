@@ -13,7 +13,6 @@ applications:
           commands:
             - env | grep -E '^(AUTH_SECRET|NEXTAUTH_SECRET|AUTH_URL|NEXTAUTH_URL|AUTH_TRUST_HOST|GOOGLE_OAUTH_CLIENT_ID|GOOGLE_OAUTH_CLIENT_SECRET|ALLOWED_GOOGLE_DOMAIN|BOOTSTRAP_ADMIN_EMAIL|DATABASE_URL)=' > .env.production || true
             - pnpm --filter @gam/web build
-            # Prisma engine ko HAR woh jagah copy karo jahan runtime dhoondhta hai
             - mkdir -p .next/server
             - cp ../../packages/db/src/generated/client/*.node .next/server/ || true
             - mkdir -p .next/server/src/generated/client
