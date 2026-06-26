@@ -10,7 +10,7 @@ const nextConfig = {
   // default. Keep Prisma external and explicitly include the generated client
   // (engine binaries) in the server output trace so Amplify's Lambda runtime
   // can locate the RHEL engine.
-  serverExternalPackages: ['@prisma/client', '@gam/db'],
+  serverExternalPackages: ['@prisma/client'],
   outputFileTracingIncludes: {
     '/**': [
       '../../packages/db/src/generated/client/**/*.node',
