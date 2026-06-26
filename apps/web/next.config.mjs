@@ -1,16 +1,23 @@
+console.log('[ENV-CHECK]',
+  'CLIENT_ID:', process.env.GOOGLE_OAUTH_CLIENT_ID ? 'SET(' + process.env.GOOGLE_OAUTH_CLIENT_ID.length + ')' : 'EMPTY',
+  'CLIENT_SECRET:', process.env.GOOGLE_OAUTH_CLIENT_SECRET ? 'SET' : 'EMPTY',
+  'AUTH_SECRET:', process.env.AUTH_SECRET ? 'SET' : 'EMPTY',
+  'NEXTAUTH_SECRET:', process.env.NEXTAUTH_SECRET ? 'SET' : 'EMPTY',
+  'AUTH_URL:', process.env.AUTH_URL || 'EMPTY',
+  'NEXTAUTH_URL:', process.env.NEXTAUTH_URL || 'EMPTY',
+);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Inline server-side env into the build so Amplify's SSR runtime can read them.
-  // Amplify console env vars don't reach the SSR Lambda at runtime, and a
-  // build-time .env.production isn't picked up either — so we bake them here.
-  // None are NEXT_PUBLIC_*, so they stay in the server bundle, not the browser.
   env: {
     GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID,
     GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
     AUTH_SECRET: process.env.AUTH_SECRET,
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+    AUTH_URL: process.env.AUTH_URL,
+    AUTH_TRUST_HOST: process.env.AUTH_TRUST_HOST,
     ALLOWED_GOOGLE_DOMAIN: process.env.ALLOWED_GOOGLE_DOMAIN,
     BOOTSTRAP_ADMIN_EMAIL: process.env.BOOTSTRAP_ADMIN_EMAIL,
     DATABASE_URL: process.env.DATABASE_URL,
