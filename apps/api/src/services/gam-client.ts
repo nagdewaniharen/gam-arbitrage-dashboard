@@ -11,9 +11,14 @@
  *     (no AdX line items configured). Using the regular `AD_EXCHANGE_*` family.
  *
  * Dimensions:
- *   - DATE + AD_UNIT_NAME + DOMAIN + CUSTOM_TARGETING_VALUE_ID — needed for the
- *     dashboard's breakdown tables (campaign × source × headline × lander × image)
- *     and the site-level filter (DOMAIN → publisher domain where the ad rendered).
+ *   - DATE + AD_UNIT_NAME + CUSTOM_TARGETING_VALUE_ID — needed for the dashboard's
+ *     breakdown tables (campaign × source × headline × lander × image).
+ *   - DOMAIN (site filter): GAM rejects DOMAIN when paired with
+ *     TOTAL_LINE_ITEM_LEVEL_* columns (COLUMNS_NOT_SUPPORTED_FOR_REQUESTED_DIMENSIONS).
+ *     DOMAIN is only compatible with AD_EXCHANGE_* columns. We omit DOMAIN from
+ *     the TOTAL and TOTAL+viewability queries; the `site` column stays empty for
+ *     GAM-pulled rows. To populate it, either upload a CSV with a `site` column
+ *     or extend this client with a separate ad_exchange+DOMAIN query (TODO).
  *
  * Auth env vars (loaded from .env):
  *   - GAM_USER_OAUTH_CLIENT_ID
@@ -256,7 +261,6 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
           <ns:reportQuery>
             <ns:dimensions>DATE</ns:dimensions>
             <ns:dimensions>AD_UNIT_NAME</ns:dimensions>
-            <ns:dimensions>DOMAIN</ns:dimensions>
             ${lineItemTypeDimXml}
             ${customDimsXml}
             <ns:adUnitView>TOP_LEVEL</ns:adUnitView>
