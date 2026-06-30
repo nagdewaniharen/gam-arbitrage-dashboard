@@ -3,6 +3,7 @@ import { prisma, Prisma } from '@gam/db';
 import type { Dimension, PerformersResponse, PerformerRow, Period } from '@gam/types';
 import { VALID_DIMENSIONS } from '@gam/types';
 import { resolveDateRange } from '../lib/period.js';
+import { parseSites, whereGam } from '../lib/filters.js';
 import { dimColumn, isValidDimension } from '../lib/dim.js';
 import { ok, err } from '../lib/responses.js';
 
@@ -16,7 +17,7 @@ interface RawPerformerRow {
 export async function performersRoutes(app: FastifyInstance) {
   app.get<{
     Params: { type: string };
-    Querystring: { period?: Period; from?: string; to?: string; by?: Dimension; limit?: number; minImpressions?: number };
+    Querystring: { period?: Period; from?: string; to?: string; by?: Dimension; limit?: number; minImpressions?: number; sites?: string };
   }>(
     '/performers/:type',
     {
@@ -35,6 +36,7 @@ export async function performersRoutes(app: FastifyInstance) {
             by: { type: 'string', enum: [...VALID_DIMENSIONS], default: 'campaign' },
             limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
             minImpressions: { type: 'integer', minimum: 0, default: 10 },
+            sites: { type: 'string', description: 'Comma-separated site domains to filter by' },
           },
         },
       },
@@ -52,11 +54,10 @@ export async function performersRoutes(app: FastifyInstance) {
       const limit = req.query.limit ?? 10;
       const minImpressions = req.query.minImpressions ?? 10;
       const { from, to } = resolveDateRange(req.query);
+      const sites = parseSites(req.query.sites);
       const col = Prisma.raw(dimColumn(by));
 
-      let where = Prisma.empty;
-      if (from && to) where = Prisma.sql`WHERE date BETWEEN ${from} AND ${to}`;
-      else if (to) where = Prisma.sql`WHERE date <= ${to}`;
+      const where = whereGam({ from, to, sites });
 
       const orderDir = Prisma.raw(type === 'top' ? 'DESC' : 'ASC');
 

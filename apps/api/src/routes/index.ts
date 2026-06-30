@@ -13,6 +13,7 @@ import { spendRoutes } from './spend.js';
 import { internalCronRoutes } from './internal-cron.js';
 import { alertRoutes } from './alerts.js';
 import { compareRoutes } from './compare.js';
+import { sitesRoutes } from './sites.js';
 import { userRoutes } from './users.js';
 import { auditRoutes } from './audit.js';
 
@@ -30,6 +31,7 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(spendRoutes, { prefix: '/api' });
   await app.register(alertRoutes, { prefix: '/api' });
   await app.register(compareRoutes, { prefix: '/api' });
+  await app.register(sitesRoutes, { prefix: '/api' });
   await app.register(userRoutes, { prefix: '/api' });
   await app.register(auditRoutes, { prefix: '/api' });
   await app.register(internalCronRoutes, { prefix: '/internal' });

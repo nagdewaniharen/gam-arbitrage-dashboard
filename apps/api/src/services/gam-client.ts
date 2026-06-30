@@ -11,8 +11,9 @@
  *     (no AdX line items configured). Using the regular `AD_EXCHANGE_*` family.
  *
  * Dimensions:
- *   - DATE + AD_UNIT_NAME + CUSTOM_TARGETING_VALUE_ID — needed for the dashboard's
- *     breakdown tables (campaign × source × headline × lander × image).
+ *   - DATE + AD_UNIT_NAME + DOMAIN + CUSTOM_TARGETING_VALUE_ID — needed for the
+ *     dashboard's breakdown tables (campaign × source × headline × lander × image)
+ *     and the site-level filter (DOMAIN → publisher domain where the ad rendered).
  *
  * Auth env vars (loaded from .env):
  *   - GAM_USER_OAUTH_CLIENT_ID
@@ -152,6 +153,7 @@ export interface ParsedReportRow {
   headline: string;
   lander: string;
   image: string;
+  site: string;
   page: string;
   impressions: bigint;
   clicks: bigint;
@@ -254,6 +256,7 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
           <ns:reportQuery>
             <ns:dimensions>DATE</ns:dimensions>
             <ns:dimensions>AD_UNIT_NAME</ns:dimensions>
+            <ns:dimensions>DOMAIN</ns:dimensions>
             ${lineItemTypeDimXml}
             ${customDimsXml}
             <ns:adUnitView>TOP_LEVEL</ns:adUnitView>
@@ -387,6 +390,7 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             headline: get(r, 'headline'),
             lander: get(r, 'lander'),
             image: get(r, 'image'),
+            site: r['dimension_domain'] ?? r['domain'] ?? '',
             page: r['dimension_page'] ?? r['page'] ?? '',
             impressions: BigInt(Math.floor(Number(
               r['column_total_line_item_level_impressions'] ??
@@ -451,13 +455,13 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             })(),
           });
         }
-        // Aggregate by (date, ad_unit) — when LINE_ITEM_TYPE dimension is
-        // present, GAM returns multiple rows per (date, ad_unit) (one per
-        // type). Sum metrics so the DB primary key (date, ad_unit) doesn't
-        // get overwritten on upsert.
+        // Aggregate by (date, ad_unit, site) — when LINE_ITEM_TYPE dimension
+        // is present, GAM returns multiple rows per (date, ad_unit, site)
+        // (one per type). Sum metrics so the DB unique key
+        // (date, ad_unit, site, ...) doesn't get overwritten on upsert.
         const grouped = new Map<string, ParsedReportRow>();
         for (const row of out) {
-          const key = `${row.date.toISOString().slice(0, 10)}::${row.adUnit}`;
+          const key = `${row.date.toISOString().slice(0, 10)}::${row.adUnit}::${row.site}`;
           const existing = grouped.get(key);
           if (!existing) {
             grouped.set(key, row);

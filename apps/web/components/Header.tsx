@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import type { Period, StatusResponse } from '@gam/types';
 import { PeriodSelector, type CustomRange } from './PeriodSelector';
+import { SiteFilter } from './SiteFilter';
 import { UserMenu } from './UserMenu';
 import { freshnessTier, relativeTime, formatIST } from '@/lib/time';
 import { cn } from '@/lib/cn';
@@ -16,6 +17,8 @@ export function Header({
   onPeriodChange,
   customRange,
   onCustomRangeChange,
+  selectedSites,
+  onSelectedSitesChange,
   status,
   networkCode,
 }: {
@@ -23,6 +26,8 @@ export function Header({
   onPeriodChange: (_p: Period) => void;
   customRange?: CustomRange | null;
   onCustomRangeChange?: (_r: CustomRange | null) => void;
+  selectedSites: string[];
+  onSelectedSitesChange: (_s: string[]) => void;
   status: StatusResponse | undefined;
   networkCode: string;
 }) {
@@ -110,6 +115,7 @@ export function Header({
           <RefreshCw size={12} className={refresh.isPending ? 'animate-spin' : ''} />
           <span className="hidden sm:inline">{refresh.isPending ? 'Refreshing' : 'Refresh'}</span>
         </button>
+        <SiteFilter value={selectedSites} onChange={onSelectedSitesChange} />
         <PeriodSelector
           value={period}
           onChange={onPeriodChange}

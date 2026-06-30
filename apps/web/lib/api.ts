@@ -5,6 +5,7 @@ import type {
   Dimension,
   PerformersResponse,
   Period,
+  SitesResponse,
   StatsResponse,
   StatusResponse,
   TrendResponse,
@@ -33,22 +34,27 @@ export interface DateRange {
   to: string;
 }
 
-/** Build a `?period=...` OR `?from=...&to=...` query string. */
-function rangeQuery(period: Period, range?: DateRange | null): string {
-  if (range) return `from=${range.from}&to=${range.to}`;
-  return `period=${period}`;
+/**
+ * Build a `?period=...&sites=a,b` OR `?from=...&to=...&sites=a,b` query string.
+ * `sites` is omitted entirely when empty so routes see "all sites".
+ */
+function rangeQuery(period: Period, range?: DateRange | null, sites?: string[]): string {
+  const base = range ? `from=${range.from}&to=${range.to}` : `period=${period}`;
+  if (!sites || sites.length === 0) return base;
+  return `${base}&sites=${encodeURIComponent(sites.join(','))}`;
 }
 
 export const api = {
-  stats: (period: Period, range?: DateRange | null) =>
-    get<StatsResponse>(`/api/stats?${rangeQuery(period, range)}`),
-  trend: (period: Period, range?: DateRange | null) =>
-    get<TrendResponse>(`/api/trend?${rangeQuery(period, range)}`),
-  breakdown: (dim: Dimension, period: Period, limit = 25, range?: DateRange | null) =>
-    get<BreakdownResponse>(`/api/breakdown/${dim}?${rangeQuery(period, range)}&limit=${limit}`),
-  performers: (type: 'top' | 'bottom', by: Dimension, period: Period, limit = 10, range?: DateRange | null) =>
-    get<PerformersResponse>(`/api/performers/${type}?by=${by}&${rangeQuery(period, range)}&limit=${limit}`),
-  cross: (dim1: Dimension, dim2: Dimension, period: Period, limit = 100, range?: DateRange | null) =>
-    get<CrossResponse>(`/api/cross/${dim1}/${dim2}?${rangeQuery(period, range)}&limit=${limit}`),
+  stats: (period: Period, range?: DateRange | null, sites?: string[]) =>
+    get<StatsResponse>(`/api/stats?${rangeQuery(period, range, sites)}`),
+  trend: (period: Period, range?: DateRange | null, sites?: string[]) =>
+    get<TrendResponse>(`/api/trend?${rangeQuery(period, range, sites)}`),
+  breakdown: (dim: Dimension, period: Period, limit = 25, range?: DateRange | null, sites?: string[]) =>
+    get<BreakdownResponse>(`/api/breakdown/${dim}?${rangeQuery(period, range, sites)}&limit=${limit}`),
+  performers: (type: 'top' | 'bottom', by: Dimension, period: Period, limit = 10, range?: DateRange | null, sites?: string[]) =>
+    get<PerformersResponse>(`/api/performers/${type}?by=${by}&${rangeQuery(period, range, sites)}&limit=${limit}`),
+  cross: (dim1: Dimension, dim2: Dimension, period: Period, limit = 100, range?: DateRange | null, sites?: string[]) =>
+    get<CrossResponse>(`/api/cross/${dim1}/${dim2}?${rangeQuery(period, range, sites)}&limit=${limit}`),
+  sites: () => get<SitesResponse>(`/api/sites`),
   status: () => get<StatusResponse>(`/api/status`),
 };

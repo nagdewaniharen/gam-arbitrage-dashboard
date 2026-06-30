@@ -78,11 +78,11 @@ export async function runRefresh(
     });
     const viewabilityByKey = new Map<string, { viewability: number; matchRate: number }>();
     for (const r of rowsViewability) {
-      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}::${r.site}`;
       viewabilityByKey.set(key, { viewability: r.viewability, matchRate: r.matchRate });
     }
     const rows = rowsCore.map((r) => {
-      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}::${r.site}`;
       const v = viewabilityByKey.get(key);
       return v ? { ...r, viewability: v.viewability, matchRate: v.matchRate } : r;
     });
@@ -180,6 +180,7 @@ async function upsertRows(rows: ParsedReportRow[]): Promise<number> {
               lander: r.lander,
               image: r.image,
               adUnit: r.adUnit,
+              site: r.site,
               page: r.page,
             },
           },
@@ -192,6 +193,7 @@ async function upsertRows(rows: ParsedReportRow[]): Promise<number> {
             lander: r.lander,
             image: r.image,
             adUnit: r.adUnit,
+            site: r.site,
             page: r.page,
             impressions: r.impressions,
             clicks: r.clicks,

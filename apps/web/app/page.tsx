@@ -24,9 +24,13 @@ const NETWORK_CODE = process.env.NEXT_PUBLIC_NETWORK_CODE ?? '';
 export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>('7d');
   const [customRange, setCustomRange] = useState<DateRange | null>(null);
+  const [selectedSites, setSelectedSites] = useState<string[]>([]);
   // Stable cache key for queries — switches to date-bracketed key when
-  // a custom range is active so TanStack Query refetches correctly.
+  // a custom range is active so TanStack Query refetches correctly. Site
+  // selection is folded in so picking a different site triggers refetch.
   const periodKey = customRange ? `custom:${customRange.from}..${customRange.to}` : period;
+  const sitesKey = selectedSites.length === 0 ? 'all' : [...selectedSites].sort().join(',');
+  const filterKey = `${periodKey}|${sitesKey}`;
 
   const [dimA, setDimA] = useState<Dimension>('campaign');
   // PRD §9.2 wireframe: right breakdown defaults to "Ad Unit"
@@ -43,35 +47,35 @@ export default function DashboardPage() {
   // PRD §10.1 — auto-refresh every 5 min (300_000 ms). Browser tabs that
   // stay open update without a manual refresh button click.
   const REFRESH_MS = 5 * 60 * 1000;
-  const stats = useQuery({ queryKey: ['stats', periodKey], queryFn: () => api.stats(period, customRange), refetchInterval: REFRESH_MS });
-  const trend = useQuery({ queryKey: ['trend', periodKey], queryFn: () => api.trend(period, customRange), refetchInterval: REFRESH_MS });
+  const stats = useQuery({ queryKey: ['stats', filterKey], queryFn: () => api.stats(period, customRange, selectedSites), refetchInterval: REFRESH_MS });
+  const trend = useQuery({ queryKey: ['trend', filterKey], queryFn: () => api.trend(period, customRange, selectedSites), refetchInterval: REFRESH_MS });
 
   const breakA = useQuery({
-    queryKey: ['breakdown', dimA, periodKey],
-    queryFn: () => api.breakdown(dimA, period, 100, customRange),
+    queryKey: ['breakdown', dimA, filterKey],
+    queryFn: () => api.breakdown(dimA, period, 100, customRange, selectedSites),
     refetchInterval: REFRESH_MS,
   });
   const breakB = useQuery({
-    queryKey: ['breakdown', dimB, periodKey],
-    queryFn: () => api.breakdown(dimB, period, 100, customRange),
+    queryKey: ['breakdown', dimB, filterKey],
+    queryFn: () => api.breakdown(dimB, period, 100, customRange, selectedSites),
     refetchInterval: REFRESH_MS,
   });
 
   const cross = useQuery({
-    queryKey: ['cross', crossDim1, crossDim2, periodKey],
-    queryFn: () => api.cross(crossDim1, crossDim2, period, 500, customRange),
+    queryKey: ['cross', crossDim1, crossDim2, filterKey],
+    queryFn: () => api.cross(crossDim1, crossDim2, period, 500, customRange, selectedSites),
     enabled: crossDim1 !== crossDim2,
     refetchInterval: REFRESH_MS,
   });
 
   const top = useQuery({
-    queryKey: ['performers', 'top', topBy, periodKey, topMinImpr],
-    queryFn: () => api.performers('top', topBy, period, 10, customRange),
+    queryKey: ['performers', 'top', topBy, filterKey, topMinImpr],
+    queryFn: () => api.performers('top', topBy, period, 10, customRange, selectedSites),
     refetchInterval: REFRESH_MS,
   });
   const bot = useQuery({
-    queryKey: ['performers', 'bottom', bottomBy, periodKey, bottomMinImpr],
-    queryFn: () => api.performers('bottom', bottomBy, period, 10, customRange),
+    queryKey: ['performers', 'bottom', bottomBy, filterKey, bottomMinImpr],
+    queryFn: () => api.performers('bottom', bottomBy, period, 10, customRange, selectedSites),
     refetchInterval: REFRESH_MS,
   });
 
@@ -98,6 +102,8 @@ export default function DashboardPage() {
         onPeriodChange={setPeriod}
         customRange={customRange}
         onCustomRangeChange={setCustomRange}
+        selectedSites={selectedSites}
+        onSelectedSitesChange={setSelectedSites}
         status={status.data}
         networkCode={NETWORK_CODE}
       />

@@ -10,6 +10,7 @@ export type Dimension =
   | 'lander'
   | 'image'
   | 'ad_unit'
+  | 'site'
   | 'page'
   | 'date';
 
@@ -20,6 +21,7 @@ export const VALID_DIMENSIONS: readonly Dimension[] = [
   'lander',
   'image',
   'ad_unit',
+  'site',
   'page',
   'date',
 ] as const;
@@ -110,6 +112,10 @@ export interface StatusResponse {
   databaseUp: boolean;
   buildSha?: string;
   generatedAt: string;
+}
+
+export interface SitesResponse {
+  sites: string[];
 }
 
 export interface ApiSuccess<T> {

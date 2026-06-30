@@ -32,7 +32,7 @@ model GamReport {
   lander      String   @default("")
   image       String   @default("")
   adUnit      String   @default("") @map("ad_unit")
-  site        String
+  site        String   @default("")
   page        String   @default("")
   impressions BigInt   @default(0)
   clicks      BigInt   @default(0)
@@ -47,6 +47,7 @@ model GamReport {
   @@index([date, campaign])
   @@index([date, source])
   @@index([date, adUnit])
+  @@index([date, site])
   @@index([networkId, date])
   @@map("gam_reports")
 }

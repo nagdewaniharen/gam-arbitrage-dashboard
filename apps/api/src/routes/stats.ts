@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma, Prisma } from '@gam/db';
 import type { Period, StatsResponse } from '@gam/types';
 import { previousPeriodRange, resolveDateRange } from '../lib/period.js';
+import { parseSites, whereGam } from '../lib/filters.js';
 import { ok } from '../lib/responses.js';
 
 interface TotalsRow {
@@ -12,7 +13,7 @@ interface TotalsRow {
   match_rate: Prisma.Decimal | null;
 }
 
-async function totalsForRange(from: Date | null, to: Date | null): Promise<{
+async function totalsForRange(from: Date | null, to: Date | null, sites: string[] = []): Promise<{
   totalImpressions: number;
   totalClicks: number;
   totalRevenue: number;
@@ -21,12 +22,7 @@ async function totalsForRange(from: Date | null, to: Date | null): Promise<{
   viewability: number;
   matchRate: number;
 }> {
-  let where = Prisma.empty;
-  if (from && to) {
-    where = Prisma.sql`WHERE date BETWEEN ${from} AND ${to}`;
-  } else if (to) {
-    where = Prisma.sql`WHERE date <= ${to}`;
-  }
+  const where = whereGam({ from, to, sites });
 
   const rows = await prisma.$queryRaw<TotalsRow[]>(Prisma.sql`
     SELECT
@@ -56,7 +52,7 @@ async function totalsForRange(from: Date | null, to: Date | null): Promise<{
 }
 
 export async function statsRoutes(app: FastifyInstance) {
-  app.get<{ Querystring: { period?: Period; from?: string; to?: string } }>(
+  app.get<{ Querystring: { period?: Period; from?: string; to?: string; sites?: string } }>(
     '/stats',
     {
       schema: {
@@ -68,6 +64,7 @@ export async function statsRoutes(app: FastifyInstance) {
             period: { type: 'string', enum: ['today', '7d', '30d', 'all'], default: '7d' },
             from: { type: 'string', format: 'date' },
             to: { type: 'string', format: 'date' },
+            sites: { type: 'string', description: 'Comma-separated site domains to filter by' },
           },
         },
       },
@@ -75,13 +72,14 @@ export async function statsRoutes(app: FastifyInstance) {
     async (req) => {
       const period: Period = req.query.period ?? '7d';
       const { from, to, isCustom } = resolveDateRange(req.query);
-      const current = await totalsForRange(from, to);
+      const sites = parseSites(req.query.sites);
+      const current = await totalsForRange(from, to, sites);
 
       let previousPeriod: StatsResponse['previousPeriod'];
       if (!isCustom && period !== 'all') {
         const prev = previousPeriodRange(period);
         if (prev.from && prev.to) {
-          const prevTotals = await totalsForRange(prev.from, prev.to);
+          const prevTotals = await totalsForRange(prev.from, prev.to, sites);
           const pct = (cur: number, p: number) => (p > 0 ? ((cur - p) / p) * 100 : 0);
           previousPeriod = {
             totalRevenue: prevTotals.totalRevenue,

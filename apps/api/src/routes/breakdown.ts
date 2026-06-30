@@ -3,6 +3,7 @@ import { prisma, Prisma } from '@gam/db';
 import type { BreakdownResponse, BreakdownRow, Dimension, Period } from '@gam/types';
 import { VALID_DIMENSIONS } from '@gam/types';
 import { resolveDateRange } from '../lib/period.js';
+import { parseSites, whereGam } from '../lib/filters.js';
 import { dimColumn, isValidDimension } from '../lib/dim.js';
 import { ok, err } from '../lib/responses.js';
 
@@ -16,7 +17,7 @@ interface RawRow {
 export async function breakdownRoutes(app: FastifyInstance) {
   app.get<{
     Params: { dimension: string };
-    Querystring: { period?: Period; from?: string; to?: string; limit?: number };
+    Querystring: { period?: Period; from?: string; to?: string; limit?: number; sites?: string };
   }>(
     '/breakdown/:dimension',
     {
@@ -33,6 +34,7 @@ export async function breakdownRoutes(app: FastifyInstance) {
           properties: {
             period: { type: 'string', enum: ['today', '7d', '30d', 'all'], default: '7d' },
             limit: { type: 'integer', minimum: 1, maximum: 500, default: 50 },
+            sites: { type: 'string', description: 'Comma-separated site domains to filter by' },
           },
         },
       },
@@ -45,11 +47,10 @@ export async function breakdownRoutes(app: FastifyInstance) {
       const period: Period = req.query.period ?? '7d';
       const limit = req.query.limit ?? 50;
       const { from, to } = resolveDateRange(req.query);
+      const sites = parseSites(req.query.sites);
       const col = Prisma.raw(dimColumn(dimension as Dimension));
 
-      let where = Prisma.empty;
-      if (from && to) where = Prisma.sql`WHERE date BETWEEN ${from} AND ${to}`;
-      else if (to) where = Prisma.sql`WHERE date <= ${to}`;
+      const where = whereGam({ from, to, sites });
 
       const rows = await prisma.$queryRaw<RawRow[]>(Prisma.sql`
         SELECT

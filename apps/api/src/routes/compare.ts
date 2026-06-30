@@ -4,6 +4,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { prisma, Prisma } from '@gam/db';
+import { parseSites, whereGam } from '../lib/filters.js';
 import { ok, err } from '../lib/responses.js';
 
 interface CompareTotals {
@@ -12,14 +13,15 @@ interface CompareTotals {
   revenue: Prisma.Decimal | null;
 }
 
-async function aggregate(from: Date, to: Date) {
+async function aggregate(from: Date, to: Date, sites: string[]) {
+  const where = whereGam({ from, to, sites });
   const rows = await prisma.$queryRaw<CompareTotals[]>(Prisma.sql`
     SELECT
       COALESCE(SUM(impressions), 0)::bigint AS impressions,
       COALESCE(SUM(clicks), 0)::bigint      AS clicks,
       COALESCE(SUM(revenue), 0)             AS revenue
     FROM gam_reports
-    WHERE date BETWEEN ${from} AND ${to}
+    ${where}
   `);
   const r = rows[0] ?? { impressions: 0n, clicks: 0n, revenue: new Prisma.Decimal(0) };
   const impressions = Number(r.impressions ?? 0n);
@@ -36,7 +38,7 @@ async function aggregate(from: Date, to: Date) {
 
 export async function compareRoutes(app: FastifyInstance) {
   app.get<{
-    Querystring: { fromA: string; toA: string; fromB: string; toB: string };
+    Querystring: { fromA: string; toA: string; fromB: string; toB: string; sites?: string };
   }>(
     '/compare',
     {
@@ -51,6 +53,7 @@ export async function compareRoutes(app: FastifyInstance) {
             toA: { type: 'string', format: 'date' },
             fromB: { type: 'string', format: 'date' },
             toB: { type: 'string', format: 'date' },
+            sites: { type: 'string', description: 'Comma-separated site domains to filter by' },
           },
         },
       },
@@ -63,7 +66,8 @@ export async function compareRoutes(app: FastifyInstance) {
       if ([fromA, toA, fromB, toB].some((d) => isNaN(d.getTime()))) {
         return reply.code(400).send(err('INVALID_DATE', 'fromA/toA/fromB/toB must be YYYY-MM-DD'));
       }
-      const [a, b] = await Promise.all([aggregate(fromA, toA), aggregate(fromB, toB)]);
+      const sites = parseSites(req.query.sites);
+      const [a, b] = await Promise.all([aggregate(fromA, toA, sites), aggregate(fromB, toB, sites)]);
       const change = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : 0);
       return ok({
         a: { from: req.query.fromA, to: req.query.toA, ...a },
