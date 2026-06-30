@@ -76,17 +76,60 @@ export async function runRefresh(
       log.warn(`viewability query failed (non-fatal): ${(e as Error).message}`);
       return [];
     });
+    // Third query: per-(date, ad_unit, domain) impression counts. We pick the
+    // dominant domain per (date, ad_unit) and tag it onto the main TOTAL_*
+    // row. DOMAIN can't ride alongside TOTAL_LINE_ITEM_LEVEL_*, hence the
+    // separate query — see gam-client.ts site_breakdown family for context.
+    const rowsSite: ParsedReportRow[] = await runGamReport(
+      { fromDate, toDate, columnFamily: 'site_breakdown' },
+      log,
+    ).catch((e) => {
+      log.warn(`site_breakdown query failed (non-fatal): ${(e as Error).message}`);
+      return [];
+    });
     const viewabilityByKey = new Map<string, { viewability: number; matchRate: number }>();
     for (const r of rowsViewability) {
-      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}::${r.site}`;
+      // Both core and viewability queries run without DOMAIN, so site is
+      // always '' on both sides — key by (date, ad_unit) only.
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
       viewabilityByKey.set(key, { viewability: r.viewability, matchRate: r.matchRate });
     }
+    // Build (date, ad_unit) -> { site -> total impressions } so we can pick
+    // the dominant site per ad unit per day.
+    const siteImpressionsByKey = new Map<string, Map<string, bigint>>();
+    for (const r of rowsSite) {
+      if (!r.site) continue;
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
+      let inner = siteImpressionsByKey.get(key);
+      if (!inner) {
+        inner = new Map();
+        siteImpressionsByKey.set(key, inner);
+      }
+      inner.set(r.site, (inner.get(r.site) ?? 0n) + r.impressions);
+    }
+    const dominantSiteByKey = new Map<string, string>();
+    for (const [key, sites] of siteImpressionsByKey) {
+      let topSite = '';
+      let topImp = -1n;
+      for (const [site, imp] of sites) {
+        if (imp > topImp) {
+          topImp = imp;
+          topSite = site;
+        }
+      }
+      if (topSite) dominantSiteByKey.set(key, topSite);
+    }
     const rows = rowsCore.map((r) => {
-      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}::${r.site}`;
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
       const v = viewabilityByKey.get(key);
-      return v ? { ...r, viewability: v.viewability, matchRate: v.matchRate } : r;
+      const site = dominantSiteByKey.get(key) ?? r.site;
+      const merged = v ? { ...r, viewability: v.viewability, matchRate: v.matchRate, site } : { ...r, site };
+      return merged;
     });
-    log.info(`gam.refresh: merged ${rowsCore.length} core rows with ${rowsViewability.length} viewability rows`);
+    log.info(
+      `gam.refresh: merged ${rowsCore.length} core rows with ${rowsViewability.length} viewability rows ` +
+        `and ${rowsSite.length} site rows (${dominantSiteByKey.size} ad-units tagged with dominant site)`,
+    );
     // Clear existing rows in this date range before upserting. This keeps the
     // DB in sync with GAM's source of truth — if a (date, ad_unit) drops out
     // of the report (e.g., because column-family / dimension changes filtered

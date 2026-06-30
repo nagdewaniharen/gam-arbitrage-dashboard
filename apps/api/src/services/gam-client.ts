@@ -146,8 +146,14 @@ export interface GamReportRunOptions {
    *   - 'total_line_item_level': TOTAL_LINE_ITEM_LEVEL_* — sum of ALL programmatic
    *     channels (Open Auction + Preferred Deals + Programmatic Guaranteed + direct).
    *     Matches the GAM UI "Programmatic channels" total.
+   *   - 'viewability_metrics': active-view + match-rate columns, run separately
+   *     because they can't appear alongside LINE_ITEM_TYPE dim.
+   *   - 'site_breakdown': minimal AD_EXCHANGE_IMPRESSIONS + DOMAIN dim, used only
+   *     to compute per-(date, ad_unit) dominant site for tagging main rows.
+   *     GAM rejects DOMAIN alongside TOTAL_LINE_ITEM_LEVEL_*, so we pull site
+   *     attribution separately here.
    */
-  columnFamily?: 'ad_exchange' | 'total_line_item_level' | 'viewability_metrics';
+  columnFamily?: 'ad_exchange' | 'total_line_item_level' | 'viewability_metrics' | 'site_breakdown';
 }
 
 export interface ParsedReportRow {
@@ -221,14 +227,21 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
               'AD_EXCHANGE_MATCH_RATE',
               'TOTAL_AD_REQUESTS',
             ]
-            : [
-              'AD_EXCHANGE_IMPRESSIONS',
-              'AD_EXCHANGE_CLICKS',
-              'AD_EXCHANGE_REVENUE',
-              'AD_EXCHANGE_AVERAGE_ECPM',
-              'AD_EXCHANGE_RESPONSES_SERVED',
-              'AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
-            ]
+            : columnFamily === 'site_breakdown'
+              ? [
+                // Minimal column — we only need impressions to compute the
+                // dominant site per (date, ad_unit). All other metrics come
+                // from the TOTAL_* query that doesn't include DOMAIN.
+                'AD_EXCHANGE_IMPRESSIONS',
+              ]
+              : [
+                'AD_EXCHANGE_IMPRESSIONS',
+                'AD_EXCHANGE_CLICKS',
+                'AD_EXCHANGE_REVENUE',
+                'AD_EXCHANGE_AVERAGE_ECPM',
+                'AD_EXCHANGE_RESPONSES_SERVED',
+                'AD_EXCHANGE_ACTIVE_VIEW_PERCENT_VIEWABLE_IMPRESSIONS',
+              ]
       )
         .map((c) => `<ns:columns>${c}</ns:columns>`)
         .join('\n            ');
@@ -254,6 +267,13 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       const lineItemTypeDimXml =
         columnFamily === 'total_line_item_level' ? '<ns:dimensions>LINE_ITEM_TYPE</ns:dimensions>' : '';
 
+      // DOMAIN is only compatible with AD_EXCHANGE_* columns (GAM rejects it
+      // alongside TOTAL_LINE_ITEM_LEVEL_*). The site_breakdown family is the
+      // only place we pull it; results feed a (date, ad_unit) -> dominant site
+      // map in the runner.
+      const domainDimXml =
+        columnFamily === 'site_breakdown' ? '<ns:dimensions>DOMAIN</ns:dimensions>' : '';
+
       // GAM v202511 ReportQuery XSD requires this exact element order:
       //   dimensions → adUnitView → columns → customDimensionKeyIds → startDate → endDate → ...
       const runBody = `<ns:runReportJob>
@@ -261,6 +281,7 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
           <ns:reportQuery>
             <ns:dimensions>DATE</ns:dimensions>
             <ns:dimensions>AD_UNIT_NAME</ns:dimensions>
+            ${domainDimXml}
             ${lineItemTypeDimXml}
             ${customDimsXml}
             <ns:adUnitView>TOP_LEVEL</ns:adUnitView>
