@@ -357,11 +357,21 @@ async function pollAndDownload(jobId: string, log: Logger): Promise<string> {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`GAM CSV download failed: HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
+      let csv: string;
       try {
-        return zlib.gunzipSync(buf).toString('utf-8');
+        csv = zlib.gunzipSync(buf).toString('utf-8');
       } catch {
-        return buf.toString('utf-8');
+        csv = buf.toString('utf-8');
       }
+      // Log the CSV header + first data row so we can see what columns GAM
+      // actually emits (helps identify the right site/url column name).
+      const firstNewline = csv.indexOf('\n');
+      const secondNewline = csv.indexOf('\n', firstNewline + 1);
+      if (firstNewline > 0) {
+        log.info(`GAM CSV header: ${csv.slice(0, firstNewline).slice(0, 500)}`);
+        if (secondNewline > 0) log.info(`GAM CSV row 1: ${csv.slice(firstNewline + 1, secondNewline).slice(0, 500)}`);
+      }
+      return csv;
     }
     if (status === 'FAILED') throw new Error(`GAM ReportJob ${jobId} FAILED`);
     delay = Math.min(delay * 1.5, 20_000);
