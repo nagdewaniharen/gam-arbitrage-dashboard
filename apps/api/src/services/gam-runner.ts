@@ -36,6 +36,7 @@ export interface RefreshResult {
   uniqueSitesInBreakdown?: string[];
   lastCsvHeader?: string | null;
   lastCsvRow1?: string | null;
+  diag?: unknown;
 }
 
 export async function runRefresh(
@@ -120,6 +121,13 @@ export async function runRefresh(
       `gam.refresh: got site breakdown for ${siteSharesByDate.size} dates ` +
         `from ${rowsSite.length} GAM rows`,
     );
+    let unsplitCount = 0;
+    let splitCount = 0;
+    let splitRowsProduced = 0;
+    const rowsCoreDates = new Set<string>();
+    for (const r of rowsCore) rowsCoreDates.add(r.date.toISOString().slice(0, 10));
+    const siteDates = Array.from(siteSharesByDate.keys()).sort();
+    const missingDates = Array.from(rowsCoreDates).filter((d) => !siteSharesByDate.has(d));
     const rows: ParsedReportRow[] = [];
     for (const r of rowsCore) {
       const viewKey = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
@@ -130,13 +138,16 @@ export async function runRefresh(
       const shares = siteSharesByDate.get(r.date.toISOString().slice(0, 10));
       if (!shares || shares.size === 0) {
         rows.push(merged);
+        unsplitCount++;
         continue;
       }
       const totalMapped = Array.from(shares.values()).reduce((a, x) => a + x, 0n);
       if (totalMapped === 0n) {
         rows.push(merged);
+        unsplitCount++;
         continue;
       }
+      splitCount++;
       // Split each (date, ad_unit) TOTAL_* row across sites using the day's
       // per-domain request share. Give the remainder to the largest site so
       // per-ad-unit totals reconcile exactly.
@@ -147,6 +158,7 @@ export async function runRefresh(
         .map(([site, impressions]) => ({ site, impressions }))
         .sort((a, b) => (b.impressions > a.impressions ? 1 : -1));
       sortedShares.forEach((s, idx) => {
+        splitRowsProduced++;
         const isLast = idx === sortedShares.length - 1;
         const share = Number(s.impressions) / Number(totalMapped);
         const imp = isLast
@@ -222,6 +234,23 @@ export async function runRefresh(
       uniqueSitesInBreakdown: Array.from(uniqueSites).slice(0, 30),
       lastCsvHeader: GamClient.lastCsvHeaderDebug?.header ?? null,
       lastCsvRow1: GamClient.lastCsvHeaderDebug?.row1 ?? null,
+      diag: {
+        rowsCoreLen: rowsCore.length,
+        rowsCoreDates: Array.from(rowsCoreDates).sort(),
+        siteDates,
+        missingDates,
+        unsplitCount,
+        splitCount,
+        splitRowsProduced,
+        totalOutputRows: rows.length,
+        siteSharesSample: siteDates.slice(0, 2).map((d) => ({
+          date: d,
+          sites: Array.from(siteSharesByDate.get(d)!.entries()).map(([site, imp]) => ({
+            site,
+            impressions: imp.toString(),
+          })),
+        })),
+      },
     };
   } catch (e) {
     const error = (e as Error).message;
