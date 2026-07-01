@@ -229,10 +229,14 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
             ]
             : columnFamily === 'site_breakdown'
               ? [
-                // Minimal column — we only need impressions to compute the
-                // dominant site per (date, ad_unit). All other metrics come
-                // from the TOTAL_* query that doesn't include DOMAIN.
+                // Match the ad_exchange column set (GAM rejected a single-column
+                // query with `NOT_NULL @ columns` — schema wants the full AdX
+                // metric set even though we only use impressions downstream to
+                // compute per-site shares).
                 'AD_EXCHANGE_IMPRESSIONS',
+                'AD_EXCHANGE_CLICKS',
+                'AD_EXCHANGE_REVENUE',
+                'AD_EXCHANGE_AVERAGE_ECPM',
               ]
               : [
                 'AD_EXCHANGE_IMPRESSIONS',
