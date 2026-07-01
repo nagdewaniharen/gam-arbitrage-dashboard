@@ -29,6 +29,10 @@ export interface RefreshResult {
   rowsUpserted: number;
   durationMs: number;
   error?: string;
+  siteQueryRows?: number;
+  siteQueryError?: string | null;
+  adUnitsWithSites?: number;
+  uniqueSitesInBreakdown?: string[];
 }
 
 export async function runRefresh(
@@ -218,6 +222,8 @@ export async function runRefresh(
       },
     });
 
+    const uniqueSites = new Set<string>();
+    for (const r of rowsSite) if (r.site) uniqueSites.add(r.site);
     return {
       runId: run.id.toString(),
       status: 'succeeded',
@@ -226,6 +232,10 @@ export async function runRefresh(
       rowsParsed: rows.length,
       rowsUpserted: upserted,
       durationMs,
+      siteQueryRows: rowsSite.length,
+      siteQueryError: siteQueryError ?? null,
+      adUnitsWithSites: siteSharesByKey.size,
+      uniqueSitesInBreakdown: Array.from(uniqueSites).slice(0, 20),
     };
   } catch (e) {
     const error = (e as Error).message;
