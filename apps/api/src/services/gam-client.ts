@@ -272,11 +272,10 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
         columnFamily === 'total_line_item_level' ? '<ns:dimensions>LINE_ITEM_TYPE</ns:dimensions>' : '';
 
       // Site dimension only used for the site_breakdown family. GAM's UI
-      // exposes this as "Site" in Interactive Reports — the API name is
-      // AD_EXCHANGE_SITE_NAME (this is the same value shown in the GAM UI
-      // Site column, e.g. c1.ussseniorhelper.online, www.jobprivet.com).
+      // exposes this as "Site" in Interactive Reports. AD_EXCHANGE_SITE_NAME
+      // was rejected as NOT_NULL @ columns; try SITE_NAME (the plain form).
       const siteDimXml =
-        columnFamily === 'site_breakdown' ? '<ns:dimensions>AD_EXCHANGE_SITE_NAME</ns:dimensions>' : '';
+        columnFamily === 'site_breakdown' ? '<ns:dimensions>SITE_NAME</ns:dimensions>' : '';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
       //   dimensions → adUnitView → columns → customDimensionKeyIds → startDate → endDate → ...
@@ -420,9 +419,10 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             lander: get(r, 'lander'),
             image: get(r, 'image'),
             site:
-              r['dimension_ad_exchange_site_name'] ??
               r['dimension_site_name'] ??
+              r['dimension_ad_exchange_site_name'] ??
               r['dimension_domain'] ??
+              r['dimension_url'] ??
               r['site'] ??
               r['domain'] ??
               '',
