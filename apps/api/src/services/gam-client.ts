@@ -288,12 +288,13 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       // only applies when an AD_UNIT_* dim is present).
       const isSiteBreakdown = columnFamily === 'site_breakdown';
       const adUnitDimXml = isSiteBreakdown ? '' : '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
-      // DOMAIN is the only site dim this network exposes via SOAP. HOSTNAME
-      // gets aliased back to DOMAIN, AD_EXCHANGE_HOSTNAME gets silently
-      // dropped. So we accept eTLD+1 aggregation — 7 base domains matches
-      // what all 14 UI subdomains roll up to (jobprivet.com + www.jobprivet.com
-      // merge; c1-c13.usseniorhelper.online merge into usseniorhelper.online).
-      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>DOMAIN</ns:dimensions>' : '';
+      // Trying SITE_ID as one more attempt for subdomain granularity. If GAM
+      // returns numeric IDs that map to configured Site entities (Inventory→
+      // Sites), we can preserve subdomain distinction — falls back to DOMAIN
+      // (7 base domains) via graceful degradation if silently stripped.
+      const siteDimXml = isSiteBreakdown
+        ? '<ns:dimensions>SITE_ID</ns:dimensions>\n            <ns:dimensions>DOMAIN</ns:dimensions>'
+        : '';
       const adUnitViewXml = isSiteBreakdown ? '' : '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
@@ -452,12 +453,16 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             image: get(r, 'image'),
             site: (() => {
               const raw =
+                // Prefer site_name if GAM populates it (via SITE_ID lookup),
+                // then hostname/URL variants for subdomain preservation, and
+                // finally DOMAIN for base-domain fallback.
+                r['dimension_site_name'] ??
                 r['dimension_hostname'] ??
                 r['dimension_ad_exchange_hostname'] ??
                 r['dimension_ad_exchange_url'] ??
                 r['dimension_url'] ??
-                r['dimension_site_name'] ??
                 r['dimension_ad_exchange_site_name'] ??
+                r['dimension_site_id'] ??
                 r['dimension_domain'] ??
                 r['ad_exchange_url'] ??
                 r['url'] ??
