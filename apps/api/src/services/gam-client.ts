@@ -156,6 +156,10 @@ export interface GamReportRunOptions {
   columnFamily?: 'ad_exchange' | 'total_line_item_level' | 'viewability_metrics' | 'site_breakdown';
 }
 
+// Debug: expose raw CSV header + first row from the last runGamReport call
+// so callers can identify GAM's actual column names.
+export let lastCsvHeaderDebug: { header: string; row1: string } | null = null;
+
 export interface ParsedReportRow {
   date: Date;
   adUnit: string;
@@ -368,8 +372,11 @@ async function pollAndDownload(jobId: string, log: Logger): Promise<string> {
       const firstNewline = csv.indexOf('\n');
       const secondNewline = csv.indexOf('\n', firstNewline + 1);
       if (firstNewline > 0) {
-        log.info(`GAM CSV header: ${csv.slice(0, firstNewline).slice(0, 500)}`);
-        if (secondNewline > 0) log.info(`GAM CSV row 1: ${csv.slice(firstNewline + 1, secondNewline).slice(0, 500)}`);
+        const header = csv.slice(0, firstNewline).slice(0, 500);
+        const row1 = secondNewline > 0 ? csv.slice(firstNewline + 1, secondNewline).slice(0, 500) : '';
+        log.info(`GAM CSV header: ${header}`);
+        if (row1) log.info(`GAM CSV row 1: ${row1}`);
+        lastCsvHeaderDebug = { header, row1 };
       }
       return csv;
     }

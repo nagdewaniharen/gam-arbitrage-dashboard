@@ -7,6 +7,7 @@
  */
 import { prisma, Prisma } from '@gam/db';
 import { env } from '../config/env.js';
+import * as GamClient from './gam-client.js';
 import { runGamReport } from './gam-client.js';
 import type { ParsedReportRow } from './gam-client.js';
 
@@ -33,6 +34,8 @@ export interface RefreshResult {
   siteQueryError?: string | null;
   adUnitsWithSites?: number;
   uniqueSitesInBreakdown?: string[];
+  lastCsvHeader?: string | null;
+  lastCsvRow1?: string | null;
 }
 
 export async function runRefresh(
@@ -215,6 +218,8 @@ export async function runRefresh(
       siteQueryError,
       adUnitsWithSites: siteSharesByDate.size,
       uniqueSitesInBreakdown: Array.from(uniqueSites).slice(0, 30),
+      lastCsvHeader: GamClient.lastCsvHeaderDebug?.header ?? null,
+      lastCsvRow1: GamClient.lastCsvHeaderDebug?.row1 ?? null,
     };
   } catch (e) {
     const error = (e as Error).message;
