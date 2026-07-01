@@ -289,15 +289,12 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       // average.
       const isSiteBreakdown = columnFamily === 'site_breakdown';
       const adUnitDimXml = '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
-      // DOMAIN is the ONLY site dim this network exposes via SOAP.
-      // Exhaustively tried: HOSTNAME (aliased), AD_EXCHANGE_HOSTNAME (dropped),
-      // URL (dropped), AD_EXCHANGE_URL (dropped), SITE_NAME (NOT_NULL error),
-      // AD_EXCHANGE_SITE_NAME (NOT_NULL), SITE_ID + DOMAIN combo (SITE_ID dropped).
-      // Result: 7 base domains (jobprivet.com, buzzvoro.com, usseniorhelper.online,
-      // etc.) — subdomains like c1-c13.usseniorhelper.online roll up here.
-      // For subdomain granularity, GAM admin must configure Sites in
-      // GAM UI → Inventory → Sites (one per subdomain).
-      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>DOMAIN</ns:dimensions>' : '';
+      // SITE_NAME with these specific ACTIVE_VIEW columns returns 46+
+      // subdomains (c1-c20.usseniorhelper.online, www.*, gu/kn/ml/mr/ta/te
+      // .buzzvoro.com, m1/m2.knowledgepuddle.com, etc.) — matches what GAM
+      // UI's Interactive Report shows. Earlier attempts failed because
+      // SITE_NAME rejected the AD_EXCHANGE_IMPRESSIONS/CLICKS/REVENUE cols.
+      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>SITE_NAME</ns:dimensions>' : '';
       const adUnitViewXml = '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
