@@ -426,16 +426,18 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             image: get(r, 'image'),
             site: (() => {
               const raw =
+                r['dimension_ad_exchange_url'] ??
                 r['dimension_url'] ??
                 r['dimension_site_name'] ??
                 r['dimension_ad_exchange_site_name'] ??
                 r['dimension_domain'] ??
+                r['ad_exchange_url'] ??
                 r['url'] ??
                 r['site'] ??
                 r['domain'] ??
                 '';
               if (!raw) return '';
-              // If we got a URL, extract the hostname for filter-friendliness.
+              // GAM returns full URLs; parse the hostname for filter-friendliness.
               try {
                 return new URL(raw.startsWith('http') ? raw : `http://${raw}`).hostname;
               } catch {
