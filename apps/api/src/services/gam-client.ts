@@ -278,9 +278,9 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       const isSiteBreakdown = columnFamily === 'site_breakdown';
       const adUnitDimXml = isSiteBreakdown ? '' : '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
       // Rotate through candidate dimensions — GAM's error message is opaque
-      // (NOT_NULL @ columns for every unsupported name). Current attempt:
-      // DOMAIN with the minimal DATE-only query companion.
-      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>DOMAIN</ns:dimensions>' : '';
+      // (NOT_NULL @ columns for every unsupported name). Current attempt: URL
+      // (GAM's Site column may map to full-URL dim; we'll parse the hostname).
+      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>URL</ns:dimensions>' : '';
       const adUnitViewXml = isSiteBreakdown ? '' : '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
@@ -424,14 +424,24 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             headline: get(r, 'headline'),
             lander: get(r, 'lander'),
             image: get(r, 'image'),
-            site:
-              r['dimension_site_name'] ??
-              r['dimension_ad_exchange_site_name'] ??
-              r['dimension_domain'] ??
-              r['dimension_url'] ??
-              r['site'] ??
-              r['domain'] ??
-              '',
+            site: (() => {
+              const raw =
+                r['dimension_url'] ??
+                r['dimension_site_name'] ??
+                r['dimension_ad_exchange_site_name'] ??
+                r['dimension_domain'] ??
+                r['url'] ??
+                r['site'] ??
+                r['domain'] ??
+                '';
+              if (!raw) return '';
+              // If we got a URL, extract the hostname for filter-friendliness.
+              try {
+                return new URL(raw.startsWith('http') ? raw : `http://${raw}`).hostname;
+              } catch {
+                return raw;
+              }
+            })(),
             page: r['dimension_page'] ?? r['page'] ?? '',
             impressions: BigInt(Math.floor(Number(
               r['column_total_line_item_level_impressions'] ??
