@@ -476,8 +476,9 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
               r['column_ad_exchange_impressions'] ??
               r['column_ad_exchange_line_item_level_impressions'] ??
               // For site_breakdown rows on networks that strip AD_EXCHANGE_*,
-              // TOTAL_AD_REQUESTS is the count proxy that survives — used
-              // only to compute per-site shares, not as a display metric.
+              // ACTIVE_VIEW measurable impressions is the count proxy that
+              // survives with DOMAIN dim.
+              r['column_ad_exchange_active_view_measurable_impressions'] ??
               r['column_total_ad_requests'] ??
               r['impressions'] ?? 0,
             ))),
