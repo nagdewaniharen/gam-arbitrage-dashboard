@@ -288,11 +288,12 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       // only applies when an AD_UNIT_* dim is present).
       const isSiteBreakdown = columnFamily === 'site_breakdown';
       const adUnitDimXml = isSiteBreakdown ? '' : '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
-      // DOMAIN dim returns aggregated eTLD+1 (base domain), merging subdomains
-      // like c1-c13.usseniorhelper.online into one. GAM UI shows subdomain
-      // granularity though (14 sites vs our 7). HOSTNAME appears to be aliased
-      // to DOMAIN; try AD_EXCHANGE_HOSTNAME (AdX-specific variant).
-      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>AD_EXCHANGE_HOSTNAME</ns:dimensions>' : '';
+      // DOMAIN is the only site dim this network exposes via SOAP. HOSTNAME
+      // gets aliased back to DOMAIN, AD_EXCHANGE_HOSTNAME gets silently
+      // dropped. So we accept eTLD+1 aggregation — 7 base domains matches
+      // what all 14 UI subdomains roll up to (jobprivet.com + www.jobprivet.com
+      // merge; c1-c13.usseniorhelper.online merge into usseniorhelper.online).
+      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>DOMAIN</ns:dimensions>' : '';
       const adUnitViewXml = isSiteBreakdown ? '' : '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
