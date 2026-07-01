@@ -76,17 +76,26 @@ export async function runRefresh(
       log.warn(`viewability query failed (non-fatal): ${(e as Error).message}`);
       return [];
     });
-    // Third query: per-(date, ad_unit, domain) impression counts. We pick the
-    // dominant domain per (date, ad_unit) and tag it onto the main TOTAL_*
-    // row. DOMAIN can't ride alongside TOTAL_LINE_ITEM_LEVEL_*, hence the
-    // separate query — see gam-client.ts site_breakdown family for context.
+    // Third query: per-(date, ad_unit, domain) impression counts. Feeds the
+    // per-site impression-share split below. DOMAIN can't ride alongside
+    // TOTAL_LINE_ITEM_LEVEL_*, hence the separate query.
+    let siteQueryError: string | undefined;
     const rowsSite: ParsedReportRow[] = await runGamReport(
       { fromDate, toDate, columnFamily: 'site_breakdown' },
       log,
     ).catch((e) => {
-      log.warn(`site_breakdown query failed (non-fatal): ${(e as Error).message}`);
+      siteQueryError = (e as Error).message;
+      log.warn(`site_breakdown query failed (non-fatal): ${siteQueryError}`);
       return [];
     });
+    log.info(
+      `gam.refresh: site_breakdown returned ${rowsSite.length} rows, ` +
+        `${rowsSite.filter((r) => r.site).length} with non-empty site`,
+    );
+    if (rowsSite.length > 0) {
+      const sampleSites = new Set(rowsSite.map((r) => r.site).filter(Boolean));
+      log.info(`gam.refresh: unique sites in breakdown: ${Array.from(sampleSites).slice(0, 10).join(', ')}`);
+    }
     const viewabilityByKey = new Map<string, { viewability: number; matchRate: number }>();
     for (const r of rowsViewability) {
       // Both core and viewability queries run without DOMAIN, so site is
@@ -189,7 +198,15 @@ export async function runRefresh(
         status: 'succeeded',
         finishedAt: new Date(),
         rowsAffected: upserted,
-        metadata: { trigger: opts.trigger, parsed: rows.length, upserted, durationMs },
+        metadata: {
+          trigger: opts.trigger,
+          parsed: rows.length,
+          upserted,
+          durationMs,
+          siteQueryRows: rowsSite.length,
+          siteQueryError: siteQueryError ?? null,
+          adUnitsWithSites: siteSharesByKey.size,
+        },
       },
     });
     await prisma.auditLog.create({
