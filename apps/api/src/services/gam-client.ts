@@ -242,13 +242,14 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
             ]
             : columnFamily === 'site_breakdown'
               ? [
-                // Match the columns shown in GAM UI's "Site" interactive
-                // report exactly. Omit AD_EXCHANGE_CLICKS (not shown in UI,
-                // may not be a valid metric on this network).
-                'AD_EXCHANGE_IMPRESSIONS',
-                'AD_EXCHANGE_REVENUE',
-                'AD_EXCHANGE_AVERAGE_ECPM',
+                // On this network, AD_EXCHANGE_IMPRESSIONS/REVENUE/CLICKS are
+                // silently stripped or trigger NOT_NULL @ columns. TOTAL_AD_REQUESTS
+                // is the count proxy that survives — enough to compute per-site
+                // share of traffic which we then apply to TOTAL_LINE_ITEM_LEVEL
+                // metrics to split by site.
+                'TOTAL_AD_REQUESTS',
                 'AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE',
+                'AD_EXCHANGE_MATCH_RATE',
               ]
               : [
                 'AD_EXCHANGE_IMPRESSIONS',
@@ -476,6 +477,10 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
               r['column_ad_server_impressions'] ??
               r['column_ad_exchange_impressions'] ??
               r['column_ad_exchange_line_item_level_impressions'] ??
+              // For site_breakdown rows on networks that strip AD_EXCHANGE_*,
+              // TOTAL_AD_REQUESTS is the count proxy that survives — used
+              // only to compute per-site shares, not as a display metric.
+              r['column_total_ad_requests'] ??
               r['impressions'] ?? 0,
             ))),
             clicks: BigInt(Math.floor(Number(
