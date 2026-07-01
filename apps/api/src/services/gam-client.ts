@@ -282,12 +282,13 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       const lineItemTypeDimXml =
         columnFamily === 'total_line_item_level' ? '<ns:dimensions>LINE_ITEM_TYPE</ns:dimensions>' : '';
 
-      // For site_breakdown, mirror what the GAM UI Interactive Report uses:
-      // AD_EXCHANGE_SITE_NAME as the only non-DATE dim, minimal columns, no
-      // AD_UNIT_NAME dim (it seems incompatible), no adUnitView (TOP_LEVEL
-      // only applies when an AD_UNIT_* dim is present).
+      // For site_breakdown: probe confirmed DOMAIN + AD_UNIT_NAME combo is
+      // accepted, giving per-(date, ad_unit, domain) breakdown. That's more
+      // accurate than the per-date shares we tried earlier — each ad-unit
+      // now gets split by its OWN site distribution instead of the day's
+      // average.
       const isSiteBreakdown = columnFamily === 'site_breakdown';
-      const adUnitDimXml = isSiteBreakdown ? '' : '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
+      const adUnitDimXml = '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
       // DOMAIN is the ONLY site dim this network exposes via SOAP.
       // Exhaustively tried: HOSTNAME (aliased), AD_EXCHANGE_HOSTNAME (dropped),
       // URL (dropped), AD_EXCHANGE_URL (dropped), SITE_NAME (NOT_NULL error),
@@ -297,7 +298,7 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       // For subdomain granularity, GAM admin must configure Sites in
       // GAM UI → Inventory → Sites (one per subdomain).
       const siteDimXml = isSiteBreakdown ? '<ns:dimensions>DOMAIN</ns:dimensions>' : '';
-      const adUnitViewXml = isSiteBreakdown ? '' : '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
+      const adUnitViewXml = '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
       //   dimensions → adUnitView → columns → customDimensionKeyIds → startDate → endDate → ...

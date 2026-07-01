@@ -104,12 +104,14 @@ export async function runRefresh(
     }
     const fromIso = fromDate.toISOString().slice(0, 10);
     const toIso = toDate.toISOString().slice(0, 10);
-    // Aggregate site query results per date (site_breakdown has no AD_UNIT
-    // dim — we get one row per (date, domain)).
+    // Aggregate site query results per (date, ad_unit) — site_breakdown now
+    // uses DOMAIN + AD_UNIT_NAME dims (probe confirmed accepted), so each
+    // (date, ad_unit) row gets its own precise site distribution instead of
+    // a day-wide average.
     const siteSharesByDate = new Map<string, Map<string, bigint>>();
     for (const r of rowsSite) {
       if (!r.site) continue;
-      const key = r.date.toISOString().slice(0, 10);
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
       let inner = siteSharesByDate.get(key);
       if (!inner) {
         inner = new Map();
@@ -135,7 +137,7 @@ export async function runRefresh(
       const merged = v
         ? { ...r, viewability: v.viewability, matchRate: v.matchRate }
         : r;
-      const shares = siteSharesByDate.get(r.date.toISOString().slice(0, 10));
+      const shares = siteSharesByDate.get(`${r.date.toISOString().slice(0, 10)}::${r.adUnit}`);
       if (!shares || shares.size === 0) {
         rows.push(merged);
         unsplitCount++;
