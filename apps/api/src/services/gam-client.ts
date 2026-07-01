@@ -242,14 +242,12 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
             ]
             : columnFamily === 'site_breakdown'
               ? [
-                // On this network, AD_EXCHANGE_IMPRESSIONS/REVENUE/CLICKS are
-                // silently stripped or trigger NOT_NULL @ columns. TOTAL_AD_REQUESTS
-                // is the count proxy that survives — enough to compute per-site
-                // share of traffic which we then apply to TOTAL_LINE_ITEM_LEVEL
-                // metrics to split by site.
-                'TOTAL_AD_REQUESTS',
+                // DOMAIN is incompatible with TOTAL_AD_REQUESTS and with the
+                // AD_EXCHANGE_IMPRESSIONS/REVENUE family (network config).
+                // Try the ACTIVE_VIEW count columns (same family as the rate
+                // column that we've confirmed works with DOMAIN).
+                'AD_EXCHANGE_ACTIVE_VIEW_MEASURABLE_IMPRESSIONS',
                 'AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE',
-                'AD_EXCHANGE_MATCH_RATE',
               ]
               : [
                 'AD_EXCHANGE_IMPRESSIONS',
