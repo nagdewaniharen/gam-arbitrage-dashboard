@@ -290,9 +290,9 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       const adUnitDimXml = isSiteBreakdown ? '' : '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
       // DOMAIN dim returns aggregated eTLD+1 (base domain), merging subdomains
       // like c1-c13.usseniorhelper.online into one. GAM UI shows subdomain
-      // granularity though (14 sites vs our 7), so try HOSTNAME which should
-      // preserve full subdomain distinction.
-      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>HOSTNAME</ns:dimensions>' : '';
+      // granularity though (14 sites vs our 7). HOSTNAME appears to be aliased
+      // to DOMAIN; try AD_EXCHANGE_HOSTNAME (AdX-specific variant).
+      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>AD_EXCHANGE_HOSTNAME</ns:dimensions>' : '';
       const adUnitViewXml = isSiteBreakdown ? '' : '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
