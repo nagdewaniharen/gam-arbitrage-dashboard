@@ -45,7 +45,15 @@ async function runArbitrary(opts: {
   cols: string[];
   fromDate: Date;
   toDate: Date;
-}): Promise<{ status: number; fault: string | null; csvHeader: string | null; csvRow1: string | null }> {
+}): Promise<{
+  status: number;
+  fault: string | null;
+  csvHeader: string | null;
+  csvRow1: string | null;
+  rowCount?: number;
+  uniqueSecondColCount?: number;
+  uniqueSecondColSample?: string[];
+}> {
   const accessToken = await getAccessToken();
   const dimsXml = opts.dims.map((d) => `<ns:dimensions>${d}</ns:dimensions>`).join('\n            ');
   const colsXml = opts.cols.map((c) => `<ns:columns>${c}</ns:columns>`).join('\n            ');
@@ -143,11 +151,26 @@ async function runArbitrary(opts: {
       const buf = Buffer.from(await dlRes.arrayBuffer());
       let csv: string;
       try { csv = zlib.gunzipSync(buf).toString('utf-8'); } catch { csv = buf.toString('utf-8'); }
-      const firstNl = csv.indexOf('\n');
-      const secondNl = csv.indexOf('\n', firstNl + 1);
-      const header = firstNl > 0 ? csv.slice(0, firstNl) : null;
-      const row1 = secondNl > 0 ? csv.slice(firstNl + 1, secondNl) : null;
-      return { status: 200, fault: null, csvHeader: header, csvRow1: row1 };
+      const lines = csv.split('\n').filter((l) => l.trim().length > 0);
+      const header = lines[0] ?? null;
+      const dataLines = lines.slice(1);
+      // Column index 1 is typically the second dimension (i.e., the site
+      // dimension). Extract unique values across all rows to see if this dim
+      // actually returns subdomain granularity or aggregates to base domain.
+      const uniqueSecondCol = new Set<string>();
+      for (const line of dataLines) {
+        const cols = line.split(',');
+        if (cols.length >= 2) uniqueSecondCol.add(cols[1]!);
+      }
+      return {
+        status: 200,
+        fault: null,
+        csvHeader: header,
+        csvRow1: dataLines[0] ?? null,
+        rowCount: dataLines.length,
+        uniqueSecondColCount: uniqueSecondCol.size,
+        uniqueSecondColSample: Array.from(uniqueSecondCol).slice(0, 40),
+      };
     }
     if (status === 'FAILED') return { status: 200, fault: `ReportJob FAILED`, csvHeader: null, csvRow1: null };
     delay = Math.min(delay * 1.5, 15000);
