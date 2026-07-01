@@ -278,9 +278,10 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       const isSiteBreakdown = columnFamily === 'site_breakdown';
       const adUnitDimXml = isSiteBreakdown ? '' : '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
       // Rotate through candidate dimensions — GAM's error message is opaque
-      // (NOT_NULL @ columns for every unsupported name). Current attempt: URL
-      // (GAM's Site column may map to full-URL dim; we'll parse the hostname).
-      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>URL</ns:dimensions>' : '';
+      // (NOT_NULL @ columns for every unsupported name). Attempts so far:
+      // DOMAIN, SITE_NAME, AD_EXCHANGE_SITE_NAME, URL — all rejected.
+      // Final try: AD_EXCHANGE_URL.
+      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>AD_EXCHANGE_URL</ns:dimensions>' : '';
       const adUnitViewXml = isSiteBreakdown ? '' : '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
