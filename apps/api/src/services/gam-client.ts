@@ -105,6 +105,11 @@ function buildEnvelope(opts: { networkCode: string; body: string }): string {
 </soap:Envelope>`;
 }
 
+// Expose the last raw SOAP fault XML we saw so operators can copy-paste it
+// verbatim into support tickets.
+export let lastSoapFaultXml: string | null = null;
+export let lastSoapRequestXml: string | null = null;
+
 async function soapCall(opts: { action: string; body: string; log: Logger }): Promise<string> {
   const accessToken = await getAccessToken();
   const envelope = buildEnvelope({ networkCode: env.GAM_NETWORK_CODE, body: opts.body });
@@ -120,11 +125,15 @@ async function soapCall(opts: { action: string; body: string; log: Logger }): Pr
   const text = await res.text();
   if (!res.ok) {
     const fault = /<faultstring[^>]*>([\s\S]*?)<\/faultstring>/.exec(text)?.[1];
+    lastSoapFaultXml = text;
+    lastSoapRequestXml = envelope;
     opts.log.error(`GAM SOAP ${opts.action} failed: HTTP ${res.status}`, fault ?? text);
     throw new Error(`GAM SOAP ${opts.action} HTTP ${res.status}: ${fault ?? text.slice(0, 800)}`);
   }
   const fault = /<faultstring[^>]*>([\s\S]*?)<\/faultstring>/.exec(text)?.[1];
   if (fault) {
+    lastSoapFaultXml = text;
+    lastSoapRequestXml = envelope;
     opts.log.error(`GAM SOAP ${opts.action} fault`, fault);
     throw new Error(`GAM SOAP fault: ${fault}`);
   }
@@ -280,11 +289,11 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       // only applies when an AD_UNIT_* dim is present).
       const isSiteBreakdown = columnFamily === 'site_breakdown';
       const adUnitDimXml = isSiteBreakdown ? '' : '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
-      // Rotate through candidate dimensions — GAM's error message is opaque
-      // (NOT_NULL @ columns for every unsupported name). Attempts so far:
-      // DOMAIN, SITE_NAME, AD_EXCHANGE_SITE_NAME, URL — all rejected.
-      // Final try: AD_EXCHANGE_URL.
-      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>AD_EXCHANGE_URL</ns:dimensions>' : '';
+      // GAM's SOAP API on this network rejects every documented site
+      // dimension with NOT_NULL @ columns. This request is only reachable via
+      // POST /debug/gam/site-attempt to capture the raw fault XML for
+      // support tickets; normal refresh flow no longer calls this family.
+      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>DOMAIN</ns:dimensions>' : '';
       const adUnitViewXml = isSiteBreakdown ? '' : '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:

@@ -14,6 +14,7 @@ import { internalCronRoutes } from './internal-cron.js';
 import { alertRoutes } from './alerts.js';
 import { compareRoutes } from './compare.js';
 import { sitesRoutes } from './sites.js';
+import { gamDebugRoutes } from './gam-debug.js';
 import { userRoutes } from './users.js';
 import { auditRoutes } from './audit.js';
 
@@ -32,6 +33,7 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(alertRoutes, { prefix: '/api' });
   await app.register(compareRoutes, { prefix: '/api' });
   await app.register(sitesRoutes, { prefix: '/api' });
+  await app.register(gamDebugRoutes, { prefix: '/api' });
   await app.register(userRoutes, { prefix: '/api' });
   await app.register(auditRoutes, { prefix: '/api' });
   await app.register(internalCronRoutes, { prefix: '/internal' });
