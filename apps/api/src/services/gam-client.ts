@@ -288,11 +288,11 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       // only applies when an AD_UNIT_* dim is present).
       const isSiteBreakdown = columnFamily === 'site_breakdown';
       const adUnitDimXml = isSiteBreakdown ? '' : '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
-      // GAM's SOAP API on this network rejects every documented site
-      // dimension with NOT_NULL @ columns. This request is only reachable via
-      // POST /debug/gam/site-attempt to capture the raw fault XML for
-      // support tickets; normal refresh flow no longer calls this family.
-      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>DOMAIN</ns:dimensions>' : '';
+      // DOMAIN dim returns aggregated eTLD+1 (base domain), merging subdomains
+      // like c1-c13.usseniorhelper.online into one. GAM UI shows subdomain
+      // granularity though (14 sites vs our 7), so try HOSTNAME which should
+      // preserve full subdomain distinction.
+      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>HOSTNAME</ns:dimensions>' : '';
       const adUnitViewXml = isSiteBreakdown ? '' : '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
@@ -451,6 +451,8 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             image: get(r, 'image'),
             site: (() => {
               const raw =
+                r['dimension_hostname'] ??
+                r['dimension_ad_exchange_hostname'] ??
                 r['dimension_ad_exchange_url'] ??
                 r['dimension_url'] ??
                 r['dimension_site_name'] ??
@@ -460,6 +462,7 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
                 r['url'] ??
                 r['site'] ??
                 r['domain'] ??
+                r['hostname'] ??
                 '';
               if (!raw) return '';
               // GAM returns full URLs; parse the hostname for filter-friendliness.
