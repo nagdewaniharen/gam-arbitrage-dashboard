@@ -271,12 +271,12 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       const lineItemTypeDimXml =
         columnFamily === 'total_line_item_level' ? '<ns:dimensions>LINE_ITEM_TYPE</ns:dimensions>' : '';
 
-      // DOMAIN is only compatible with AD_EXCHANGE_* columns (GAM rejects it
-      // alongside TOTAL_LINE_ITEM_LEVEL_*). The site_breakdown family is the
-      // only place we pull it; results feed a (date, ad_unit) -> dominant site
-      // map in the runner.
-      const domainDimXml =
-        columnFamily === 'site_breakdown' ? '<ns:dimensions>DOMAIN</ns:dimensions>' : '';
+      // Site dimension only used for the site_breakdown family. GAM's UI
+      // exposes this as "Site" in Interactive Reports — the API name is
+      // AD_EXCHANGE_SITE_NAME (this is the same value shown in the GAM UI
+      // Site column, e.g. c1.ussseniorhelper.online, www.jobprivet.com).
+      const siteDimXml =
+        columnFamily === 'site_breakdown' ? '<ns:dimensions>AD_EXCHANGE_SITE_NAME</ns:dimensions>' : '';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
       //   dimensions → adUnitView → columns → customDimensionKeyIds → startDate → endDate → ...
@@ -285,7 +285,7 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
           <ns:reportQuery>
             <ns:dimensions>DATE</ns:dimensions>
             <ns:dimensions>AD_UNIT_NAME</ns:dimensions>
-            ${domainDimXml}
+            ${siteDimXml}
             ${lineItemTypeDimXml}
             ${customDimsXml}
             <ns:adUnitView>TOP_LEVEL</ns:adUnitView>
@@ -419,7 +419,13 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             headline: get(r, 'headline'),
             lander: get(r, 'lander'),
             image: get(r, 'image'),
-            site: r['dimension_domain'] ?? r['domain'] ?? '',
+            site:
+              r['dimension_ad_exchange_site_name'] ??
+              r['dimension_site_name'] ??
+              r['dimension_domain'] ??
+              r['site'] ??
+              r['domain'] ??
+              '',
             page: r['dimension_page'] ?? r['page'] ?? '',
             impressions: BigInt(Math.floor(Number(
               r['column_total_line_item_level_impressions'] ??

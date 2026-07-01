@@ -52,7 +52,7 @@ export async function runRefresh(
   const run = await prisma.cronRun.create({
     data: {
       job: 'gam.refresh',
-      status: 'running',
+      status: 'running', 
       startedAt: new Date(),
       metadata: {
         trigger: opts.trigger,
@@ -80,10 +80,11 @@ export async function runRefresh(
       log.warn(`viewability query failed (non-fatal): ${(e as Error).message}`);
       return [];
     });
-    // Third query: per-(date, ad_unit, domain) impression counts. Feeds the
-    // per-site impression-share split below. DOMAIN can't ride alongside
-    // TOTAL_LINE_ITEM_LEVEL_*, hence the separate query.
-    let siteQueryError: string | undefined;
+    // Third query — per (date, ad_unit, site) AdX impressions, used only to
+    // compute impression shares per site so we can attribute TOTAL_* revenue
+    // proportionally. GAM's SOAP API name for the "Site" dimension shown in
+    // Interactive Reports is AD_EXCHANGE_SITE_NAME.
+    let siteQueryError: string | null = null;
     const rowsSite: ParsedReportRow[] = await runGamReport(
       { fromDate, toDate, columnFamily: 'site_breakdown' },
       log,
@@ -92,27 +93,13 @@ export async function runRefresh(
       log.warn(`site_breakdown query failed (non-fatal): ${siteQueryError}`);
       return [];
     });
-    log.info(
-      `gam.refresh: site_breakdown returned ${rowsSite.length} rows, ` +
-        `${rowsSite.filter((r) => r.site).length} with non-empty site`,
-    );
-    if (rowsSite.length > 0) {
-      const sampleSites = new Set(rowsSite.map((r) => r.site).filter(Boolean));
-      log.info(`gam.refresh: unique sites in breakdown: ${Array.from(sampleSites).slice(0, 10).join(', ')}`);
-    }
     const viewabilityByKey = new Map<string, { viewability: number; matchRate: number }>();
     for (const r of rowsViewability) {
-      // Both core and viewability queries run without DOMAIN, so site is
-      // always '' on both sides — key by (date, ad_unit) only.
       const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
       viewabilityByKey.set(key, { viewability: r.viewability, matchRate: r.matchRate });
     }
     // Build (date, ad_unit) -> [ { site, impressions } ] so we can split each
-    // TOTAL_* row into one row per site, weighted by that site's impression
-    // share for the ad unit that day. Preserves per-site attribution for
-    // accurate filtering — see docs (dominant-site tagging was tried and
-    // lost >90% of jobprivet.com traffic because most ad-units had a
-    // different dominant site per day).
+    // TOTAL_* row into per-site rows weighted by that site's impression share.
     const siteSharesByKey = new Map<string, { site: string; impressions: bigint }[]>();
     for (const r of rowsSite) {
       if (!r.site) continue;
@@ -130,47 +117,42 @@ export async function runRefresh(
     for (const r of rowsCore) {
       const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
       const v = viewabilityByKey.get(key);
-      const withViewability = v
+      const merged = v
         ? { ...r, viewability: v.viewability, matchRate: v.matchRate }
         : r;
       const shares = siteSharesByKey.get(key);
       if (!shares || shares.length === 0) {
-        // No site data for this (date, ad_unit) — keep as-is with empty site.
-        rows.push(withViewability);
+        rows.push(merged);
         continue;
       }
-      const totalSiteImp = shares.reduce((a, s) => a + s.impressions, 0n);
-      if (totalSiteImp === 0n) {
-        rows.push(withViewability);
+      const totalImp = shares.reduce((a, s) => a + s.impressions, 0n);
+      if (totalImp === 0n) {
+        rows.push(merged);
         continue;
       }
-      // Split the TOTAL_* row into per-site rows using AD_EXCHANGE impression
-      // shares as the weighting. If AD_EXCHANGE and TOTAL_* diverge a bit
-      // (Preferred Deals / PG), the split is still directionally correct.
-      let allocatedImp = 0n;
-      let allocatedClicks = 0n;
-      let allocatedRevenue = 0;
-      const sortedShares = [...shares].sort((a, b) => (b.impressions > a.impressions ? 1 : -1));
-      sortedShares.forEach((s, idx) => {
-        const isLast = idx === sortedShares.length - 1;
-        // Weight metrics by this site's impression share.
-        const share = Number(s.impressions) / Number(totalSiteImp);
-        // Use fractional allocation for all-but-last, then give remainder to
-        // the last (biggest) site so totals reconcile exactly.
+      // Split the row across sites by AdX impression share. Give the remainder
+      // to the largest site so per-day totals reconcile exactly.
+      let allocImp = 0n;
+      let allocClicks = 0n;
+      let allocRev = 0;
+      const sorted = [...shares].sort((a, b) => (b.impressions > a.impressions ? 1 : -1));
+      sorted.forEach((s, idx) => {
+        const isLast = idx === sorted.length - 1;
+        const share = Number(s.impressions) / Number(totalImp);
         const imp = isLast
-          ? withViewability.impressions - allocatedImp
-          : BigInt(Math.floor(Number(withViewability.impressions) * share));
+          ? merged.impressions - allocImp
+          : BigInt(Math.floor(Number(merged.impressions) * share));
         const clicks = isLast
-          ? withViewability.clicks - allocatedClicks
-          : BigInt(Math.floor(Number(withViewability.clicks) * share));
+          ? merged.clicks - allocClicks
+          : BigInt(Math.floor(Number(merged.clicks) * share));
         const revenue = isLast
-          ? Math.max(0, withViewability.revenue - allocatedRevenue)
-          : withViewability.revenue * share;
-        allocatedImp += imp;
-        allocatedClicks += clicks;
-        allocatedRevenue += revenue;
+          ? Math.max(0, merged.revenue - allocRev)
+          : merged.revenue * share;
+        allocImp += imp;
+        allocClicks += clicks;
+        allocRev += revenue;
         rows.push({
-          ...withViewability,
+          ...merged,
           site: s.site,
           impressions: imp,
           clicks,
@@ -179,9 +161,12 @@ export async function runRefresh(
         });
       });
     }
+    const uniqueSites = new Set<string>();
+    for (const r of rowsSite) if (r.site) uniqueSites.add(r.site);
     log.info(
       `gam.refresh: split ${rowsCore.length} core rows into ${rows.length} site-attributed rows ` +
-        `(${siteSharesByKey.size} ad-units carry site breakdown, ${rowsViewability.length} viewability rows merged)`,
+        `(${siteSharesByKey.size} ad-units carry site breakdown, ${rowsViewability.length} viewability rows merged, ` +
+        `${uniqueSites.size} unique sites)`,
     );
     // Clear existing rows in this date range before upserting. This keeps the
     // DB in sync with GAM's source of truth — if a (date, ad_unit) drops out
@@ -202,15 +187,7 @@ export async function runRefresh(
         status: 'succeeded',
         finishedAt: new Date(),
         rowsAffected: upserted,
-        metadata: {
-          trigger: opts.trigger,
-          parsed: rows.length,
-          upserted,
-          durationMs,
-          siteQueryRows: rowsSite.length,
-          siteQueryError: siteQueryError ?? null,
-          adUnitsWithSites: siteSharesByKey.size,
-        },
+        metadata: { trigger: opts.trigger, parsed: rows.length, upserted, durationMs },
       },
     });
     await prisma.auditLog.create({
@@ -222,8 +199,6 @@ export async function runRefresh(
       },
     });
 
-    const uniqueSites = new Set<string>();
-    for (const r of rowsSite) if (r.site) uniqueSites.add(r.site);
     return {
       runId: run.id.toString(),
       status: 'succeeded',
@@ -233,9 +208,9 @@ export async function runRefresh(
       rowsUpserted: upserted,
       durationMs,
       siteQueryRows: rowsSite.length,
-      siteQueryError: siteQueryError ?? null,
+      siteQueryError,
       adUnitsWithSites: siteSharesByKey.size,
-      uniqueSitesInBreakdown: Array.from(uniqueSites).slice(0, 20),
+      uniqueSitesInBreakdown: Array.from(uniqueSites).slice(0, 30),
     };
   } catch (e) {
     const error = (e as Error).message;
