@@ -288,13 +288,10 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       // only applies when an AD_UNIT_* dim is present).
       const isSiteBreakdown = columnFamily === 'site_breakdown';
       const adUnitDimXml = isSiteBreakdown ? '' : '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
-      // Trying SITE_ID as one more attempt for subdomain granularity. If GAM
-      // returns numeric IDs that map to configured Site entities (Inventory→
-      // Sites), we can preserve subdomain distinction — falls back to DOMAIN
-      // (7 base domains) via graceful degradation if silently stripped.
-      const siteDimXml = isSiteBreakdown
-        ? '<ns:dimensions>SITE_ID</ns:dimensions>\n            <ns:dimensions>DOMAIN</ns:dimensions>'
-        : '';
+      // Final subdomain attempt: URL as single dim with the count column we
+      // know works. If URL is stripped or aliased, GAM returns date-only rows
+      // (harmless — split doesn't apply, DB keeps existing site data).
+      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>URL</ns:dimensions>' : '';
       const adUnitViewXml = isSiteBreakdown ? '' : '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
