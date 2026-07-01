@@ -94,41 +94,81 @@ export async function runRefresh(
       const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
       viewabilityByKey.set(key, { viewability: r.viewability, matchRate: r.matchRate });
     }
-    // Build (date, ad_unit) -> { site -> total impressions } so we can pick
-    // the dominant site per ad unit per day.
-    const siteImpressionsByKey = new Map<string, Map<string, bigint>>();
+    // Build (date, ad_unit) -> [ { site, impressions } ] so we can split each
+    // TOTAL_* row into one row per site, weighted by that site's impression
+    // share for the ad unit that day. Preserves per-site attribution for
+    // accurate filtering — see docs (dominant-site tagging was tried and
+    // lost >90% of jobprivet.com traffic because most ad-units had a
+    // different dominant site per day).
+    const siteSharesByKey = new Map<string, { site: string; impressions: bigint }[]>();
     for (const r of rowsSite) {
       if (!r.site) continue;
       const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
-      let inner = siteImpressionsByKey.get(key);
-      if (!inner) {
-        inner = new Map();
-        siteImpressionsByKey.set(key, inner);
+      let arr = siteSharesByKey.get(key);
+      if (!arr) {
+        arr = [];
+        siteSharesByKey.set(key, arr);
       }
-      inner.set(r.site, (inner.get(r.site) ?? 0n) + r.impressions);
+      const existing = arr.find((s) => s.site === r.site);
+      if (existing) existing.impressions += r.impressions;
+      else arr.push({ site: r.site, impressions: r.impressions });
     }
-    const dominantSiteByKey = new Map<string, string>();
-    for (const [key, sites] of siteImpressionsByKey) {
-      let topSite = '';
-      let topImp = -1n;
-      for (const [site, imp] of sites) {
-        if (imp > topImp) {
-          topImp = imp;
-          topSite = site;
-        }
-      }
-      if (topSite) dominantSiteByKey.set(key, topSite);
-    }
-    const rows = rowsCore.map((r) => {
+    const rows: ParsedReportRow[] = [];
+    for (const r of rowsCore) {
       const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
       const v = viewabilityByKey.get(key);
-      const site = dominantSiteByKey.get(key) ?? r.site;
-      const merged = v ? { ...r, viewability: v.viewability, matchRate: v.matchRate, site } : { ...r, site };
-      return merged;
-    });
+      const withViewability = v
+        ? { ...r, viewability: v.viewability, matchRate: v.matchRate }
+        : r;
+      const shares = siteSharesByKey.get(key);
+      if (!shares || shares.length === 0) {
+        // No site data for this (date, ad_unit) — keep as-is with empty site.
+        rows.push(withViewability);
+        continue;
+      }
+      const totalSiteImp = shares.reduce((a, s) => a + s.impressions, 0n);
+      if (totalSiteImp === 0n) {
+        rows.push(withViewability);
+        continue;
+      }
+      // Split the TOTAL_* row into per-site rows using AD_EXCHANGE impression
+      // shares as the weighting. If AD_EXCHANGE and TOTAL_* diverge a bit
+      // (Preferred Deals / PG), the split is still directionally correct.
+      let allocatedImp = 0n;
+      let allocatedClicks = 0n;
+      let allocatedRevenue = 0;
+      const sortedShares = [...shares].sort((a, b) => (b.impressions > a.impressions ? 1 : -1));
+      sortedShares.forEach((s, idx) => {
+        const isLast = idx === sortedShares.length - 1;
+        // Weight metrics by this site's impression share.
+        const share = Number(s.impressions) / Number(totalSiteImp);
+        // Use fractional allocation for all-but-last, then give remainder to
+        // the last (biggest) site so totals reconcile exactly.
+        const imp = isLast
+          ? withViewability.impressions - allocatedImp
+          : BigInt(Math.floor(Number(withViewability.impressions) * share));
+        const clicks = isLast
+          ? withViewability.clicks - allocatedClicks
+          : BigInt(Math.floor(Number(withViewability.clicks) * share));
+        const revenue = isLast
+          ? Math.max(0, withViewability.revenue - allocatedRevenue)
+          : withViewability.revenue * share;
+        allocatedImp += imp;
+        allocatedClicks += clicks;
+        allocatedRevenue += revenue;
+        rows.push({
+          ...withViewability,
+          site: s.site,
+          impressions: imp,
+          clicks,
+          revenue,
+          ecpm: imp > 0n ? (revenue / Number(imp)) * 1000 : 0,
+        });
+      });
+    }
     log.info(
-      `gam.refresh: merged ${rowsCore.length} core rows with ${rowsViewability.length} viewability rows ` +
-        `and ${rowsSite.length} site rows (${dominantSiteByKey.size} ad-units tagged with dominant site)`,
+      `gam.refresh: split ${rowsCore.length} core rows into ${rows.length} site-attributed rows ` +
+        `(${siteSharesByKey.size} ad-units carry site breakdown, ${rowsViewability.length} viewability rows merged)`,
     );
     // Clear existing rows in this date range before upserting. This keeps the
     // DB in sync with GAM's source of truth — if a (date, ad_unit) drops out
