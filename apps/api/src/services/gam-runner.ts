@@ -83,69 +83,73 @@ export async function runRefresh(
       log.warn(`viewability query failed (non-fatal): ${(e as Error).message}`);
       return [];
     });
-    // Third query — per (date, ad_unit, site) AdX impressions, used only to
-    // compute impression shares per site so we can attribute TOTAL_* revenue
-    // proportionally. GAM's SOAP API name for the "Site" dimension shown in
-    // Interactive Reports is AD_EXCHANGE_SITE_NAME.
-    let siteQueryError: string | null = null;
-    const rowsSite: ParsedReportRow[] = await runGamReport(
-      { fromDate, toDate, columnFamily: 'site_breakdown' },
-      log,
-    ).catch((e) => {
-      siteQueryError = (e as Error).message;
-      log.warn(`site_breakdown query failed (non-fatal): ${siteQueryError}`);
-      return [];
-    });
+    // NOTE: GAM's SOAP API on this network silently drops every site-related
+    // dimension (DOMAIN, SITE_NAME, AD_EXCHANGE_SITE_NAME, URL, AD_EXCHANGE_URL).
+    // Instead of querying GAM for site data, we snapshot the per-(ad_unit) site
+    // distribution from previously-uploaded CSV rows and apply it as a mapping
+    // to fresh GAM totals. Workflow:
+    //   1. Upload a CSV once with site-tagged rows (site column populated).
+    //   2. Every subsequent refresh preserves that mapping — TOTAL_* rows get
+    //      split into per-site rows in the same proportions the CSV described.
+    // Result: site filter stays accurate + GAM numbers stay fresh.
+    const siteQueryError: string | null = null;
+    const rowsSite: ParsedReportRow[] = [];
     const viewabilityByKey = new Map<string, { viewability: number; matchRate: number }>();
     for (const r of rowsViewability) {
       const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
       viewabilityByKey.set(key, { viewability: r.viewability, matchRate: r.matchRate });
     }
-    // GAM rejects AD_UNIT_NAME + SITE_NAME combos with NOT_NULL @ columns, so
-    // site_breakdown runs per (date, site) only. We apply the day's overall
-    // site impression distribution to each (date, ad_unit) row as an
-    // approximation — accurate at the day/site level, approximate at the
-    // ad-unit/site level (assumes ad-unit traffic shares the day's site mix).
-    const siteSharesByDate = new Map<string, { site: string; impressions: bigint }[]>();
-    for (const r of rowsSite) {
-      if (!r.site) continue;
-      const key = r.date.toISOString().slice(0, 10);
-      let arr = siteSharesByDate.get(key);
-      if (!arr) {
-        arr = [];
-        siteSharesByDate.set(key, arr);
+    // Snapshot pre-existing site-tagged rows as the mapping template.
+    const fromIso = fromDate.toISOString().slice(0, 10);
+    const toIso = toDate.toISOString().slice(0, 10);
+    const preExistingSiteRows = await prisma.gamReport.findMany({
+      where: {
+        NOT: { site: '' },
+        impressions: { gt: 0 },
+      },
+      select: { adUnit: true, site: true, impressions: true },
+    });
+    const siteMappingByAdUnit = new Map<string, Map<string, bigint>>();
+    for (const r of preExistingSiteRows) {
+      let inner = siteMappingByAdUnit.get(r.adUnit);
+      if (!inner) {
+        inner = new Map();
+        siteMappingByAdUnit.set(r.adUnit, inner);
       }
-      const existing = arr.find((s) => s.site === r.site);
-      if (existing) existing.impressions += r.impressions;
-      else arr.push({ site: r.site, impressions: r.impressions });
+      inner.set(r.site, (inner.get(r.site) ?? 0n) + r.impressions);
     }
+    log.info(
+      `gam.refresh: snapshotted site mapping for ${siteMappingByAdUnit.size} ad units ` +
+        `from ${preExistingSiteRows.length} pre-existing CSV rows`,
+    );
     const rows: ParsedReportRow[] = [];
     for (const r of rowsCore) {
       const viewKey = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
-      const dateKey = r.date.toISOString().slice(0, 10);
       const v = viewabilityByKey.get(viewKey);
       const merged = v
         ? { ...r, viewability: v.viewability, matchRate: v.matchRate }
         : r;
-      const shares = siteSharesByDate.get(dateKey);
-      if (!shares || shares.length === 0) {
+      const mapping = siteMappingByAdUnit.get(r.adUnit);
+      if (!mapping || mapping.size === 0) {
         rows.push(merged);
         continue;
       }
-      const totalImp = shares.reduce((a, s) => a + s.impressions, 0n);
-      if (totalImp === 0n) {
+      const totalMapped = Array.from(mapping.values()).reduce((a, x) => a + x, 0n);
+      if (totalMapped === 0n) {
         rows.push(merged);
         continue;
       }
-      // Split the row across sites by AdX impression share. Give the remainder
-      // to the largest site so per-day totals reconcile exactly.
+      // Split the row across sites using CSV's impression proportions. Give the
+      // remainder to the largest site so per-ad-unit totals reconcile exactly.
       let allocImp = 0n;
       let allocClicks = 0n;
       let allocRev = 0;
-      const sorted = [...shares].sort((a, b) => (b.impressions > a.impressions ? 1 : -1));
-      sorted.forEach((s, idx) => {
-        const isLast = idx === sorted.length - 1;
-        const share = Number(s.impressions) / Number(totalImp);
+      const sortedShares = Array.from(mapping.entries())
+        .map(([site, impressions]) => ({ site, impressions }))
+        .sort((a, b) => (b.impressions > a.impressions ? 1 : -1));
+      sortedShares.forEach((s, idx) => {
+        const isLast = idx === sortedShares.length - 1;
+        const share = Number(s.impressions) / Number(totalMapped);
         const imp = isLast
           ? merged.impressions - allocImp
           : BigInt(Math.floor(Number(merged.impressions) * share));
@@ -169,18 +173,17 @@ export async function runRefresh(
       });
     }
     const uniqueSites = new Set<string>();
-    for (const r of rowsSite) if (r.site) uniqueSites.add(r.site);
+    for (const inner of siteMappingByAdUnit.values()) {
+      for (const site of inner.keys()) uniqueSites.add(site);
+    }
     log.info(
       `gam.refresh: split ${rowsCore.length} core rows into ${rows.length} site-attributed rows ` +
-        `(${siteSharesByDate.size} days carry site breakdown, ${rowsViewability.length} viewability rows merged, ` +
+        `(${siteMappingByAdUnit.size} ad units carry CSV mapping, ${rowsViewability.length} viewability rows merged, ` +
         `${uniqueSites.size} unique sites)`,
     );
     // Clear existing rows in this date range before upserting. This keeps the
-    // DB in sync with GAM's source of truth — if a (date, ad_unit) drops out
-    // of the report (e.g., because column-family / dimension changes filtered
-    // it out), the stale row gets removed instead of lingering with old data.
-    const fromIso = fromDate.toISOString().slice(0, 10);
-    const toIso = toDate.toISOString().slice(0, 10);
+    // DB in sync with GAM's source of truth for TOTAL metrics; the site
+    // mapping we snapshotted above lives on the incoming rows via the split.
     const deleted = await prisma.gamReport.deleteMany({
       where: { date: { gte: new Date(fromIso), lte: new Date(toIso) } },
     });
@@ -216,7 +219,7 @@ export async function runRefresh(
       durationMs,
       siteQueryRows: rowsSite.length,
       siteQueryError,
-      adUnitsWithSites: siteSharesByDate.size,
+      adUnitsWithSites: siteMappingByAdUnit.size,
       uniqueSitesInBreakdown: Array.from(uniqueSites).slice(0, 30),
       lastCsvHeader: GamClient.lastCsvHeaderDebug?.header ?? null,
       lastCsvRow1: GamClient.lastCsvHeaderDebug?.row1 ?? null,
