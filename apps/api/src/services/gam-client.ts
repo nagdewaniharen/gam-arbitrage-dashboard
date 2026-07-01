@@ -271,11 +271,14 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       const lineItemTypeDimXml =
         columnFamily === 'total_line_item_level' ? '<ns:dimensions>LINE_ITEM_TYPE</ns:dimensions>' : '';
 
-      // Site dimension only used for the site_breakdown family. GAM's UI
-      // exposes this as "Site" in Interactive Reports. AD_EXCHANGE_SITE_NAME
-      // was rejected as NOT_NULL @ columns; try SITE_NAME (the plain form).
-      const siteDimXml =
-        columnFamily === 'site_breakdown' ? '<ns:dimensions>SITE_NAME</ns:dimensions>' : '';
+      // For site_breakdown, mirror what the GAM UI Interactive Report uses:
+      // AD_EXCHANGE_SITE_NAME as the only non-DATE dim, minimal columns, no
+      // AD_UNIT_NAME dim (it seems incompatible), no adUnitView (TOP_LEVEL
+      // only applies when an AD_UNIT_* dim is present).
+      const isSiteBreakdown = columnFamily === 'site_breakdown';
+      const adUnitDimXml = isSiteBreakdown ? '' : '<ns:dimensions>AD_UNIT_NAME</ns:dimensions>';
+      const siteDimXml = isSiteBreakdown ? '<ns:dimensions>AD_EXCHANGE_SITE_NAME</ns:dimensions>' : '';
+      const adUnitViewXml = isSiteBreakdown ? '' : '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
       //   dimensions → adUnitView → columns → customDimensionKeyIds → startDate → endDate → ...
@@ -283,11 +286,11 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
         <ns:reportJob>
           <ns:reportQuery>
             <ns:dimensions>DATE</ns:dimensions>
-            <ns:dimensions>AD_UNIT_NAME</ns:dimensions>
+            ${adUnitDimXml}
             ${siteDimXml}
             ${lineItemTypeDimXml}
             ${customDimsXml}
-            <ns:adUnitView>TOP_LEVEL</ns:adUnitView>
+            ${adUnitViewXml}
             ${columnsXmlBlock}
             ${customKeyIdsXml}
             <ns:startDate>

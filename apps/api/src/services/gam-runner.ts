@@ -98,16 +98,19 @@ export async function runRefresh(
       const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
       viewabilityByKey.set(key, { viewability: r.viewability, matchRate: r.matchRate });
     }
-    // Build (date, ad_unit) -> [ { site, impressions } ] so we can split each
-    // TOTAL_* row into per-site rows weighted by that site's impression share.
-    const siteSharesByKey = new Map<string, { site: string; impressions: bigint }[]>();
+    // GAM rejects AD_UNIT_NAME + SITE_NAME combos with NOT_NULL @ columns, so
+    // site_breakdown runs per (date, site) only. We apply the day's overall
+    // site impression distribution to each (date, ad_unit) row as an
+    // approximation — accurate at the day/site level, approximate at the
+    // ad-unit/site level (assumes ad-unit traffic shares the day's site mix).
+    const siteSharesByDate = new Map<string, { site: string; impressions: bigint }[]>();
     for (const r of rowsSite) {
       if (!r.site) continue;
-      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
-      let arr = siteSharesByKey.get(key);
+      const key = r.date.toISOString().slice(0, 10);
+      let arr = siteSharesByDate.get(key);
       if (!arr) {
         arr = [];
-        siteSharesByKey.set(key, arr);
+        siteSharesByDate.set(key, arr);
       }
       const existing = arr.find((s) => s.site === r.site);
       if (existing) existing.impressions += r.impressions;
@@ -115,12 +118,13 @@ export async function runRefresh(
     }
     const rows: ParsedReportRow[] = [];
     for (const r of rowsCore) {
-      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
-      const v = viewabilityByKey.get(key);
+      const viewKey = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
+      const dateKey = r.date.toISOString().slice(0, 10);
+      const v = viewabilityByKey.get(viewKey);
       const merged = v
         ? { ...r, viewability: v.viewability, matchRate: v.matchRate }
         : r;
-      const shares = siteSharesByKey.get(key);
+      const shares = siteSharesByDate.get(dateKey);
       if (!shares || shares.length === 0) {
         rows.push(merged);
         continue;
@@ -165,7 +169,7 @@ export async function runRefresh(
     for (const r of rowsSite) if (r.site) uniqueSites.add(r.site);
     log.info(
       `gam.refresh: split ${rowsCore.length} core rows into ${rows.length} site-attributed rows ` +
-        `(${siteSharesByKey.size} ad-units carry site breakdown, ${rowsViewability.length} viewability rows merged, ` +
+        `(${siteSharesByDate.size} days carry site breakdown, ${rowsViewability.length} viewability rows merged, ` +
         `${uniqueSites.size} unique sites)`,
     );
     // Clear existing rows in this date range before upserting. This keeps the
@@ -209,7 +213,7 @@ export async function runRefresh(
       durationMs,
       siteQueryRows: rowsSite.length,
       siteQueryError,
-      adUnitsWithSites: siteSharesByKey.size,
+      adUnitsWithSites: siteSharesByDate.size,
       uniqueSitesInBreakdown: Array.from(uniqueSites).slice(0, 30),
     };
   } catch (e) {
