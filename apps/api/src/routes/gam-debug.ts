@@ -353,6 +353,27 @@ export async function gamDebugRoutes(app: FastifyInstance) {
           'AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE',
         ],
       },
+      {
+        name: 'TOTAL_IMPRESSIONS + TOTAL_CPM_AND_CPC_REVENUE (all traffic)',
+        cols: ['TOTAL_IMPRESSIONS', 'TOTAL_CPM_AND_CPC_REVENUE'],
+      },
+      {
+        name: 'AD_SERVER_IMPRESSIONS + AD_SERVER_CPM_AND_CPC_REVENUE',
+        cols: ['AD_SERVER_IMPRESSIONS', 'AD_SERVER_CPM_AND_CPC_REVENUE'],
+      },
+      {
+        name: 'TOTAL_LINE_ITEM_LEVEL + AD_EXCHANGE (both families)',
+        cols: [
+          'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+          'AD_EXCHANGE_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'AD_EXCHANGE_LINE_ITEM_LEVEL_REVENUE',
+        ],
+      },
+      {
+        name: 'AD_SERVER_ALL_ADS_IMPRESSIONS',
+        cols: ['AD_SERVER_ALL_ADS_IMPRESSIONS'],
+      },
     ];
 
     const results: unknown[] = [];
