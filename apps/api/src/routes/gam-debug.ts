@@ -292,4 +292,97 @@ export async function gamDebugRoutes(app: FastifyInstance) {
     }
     return ok({ results });
   });
+
+  // Revenue probe — tests whether we can pull REAL per-(site, country) revenue
+  // directly from GAM instead of splitting TOTAL revenue by impression share.
+  // The impression-share approximation over-counts high-volume-low-eCPM sites
+  // and under-counts low-volume-high-eCPM sites (e.g. s1.knowledgepuddle shows
+  // $8 in our dashboard vs $1 in GAM UI; jobprivet shows $1.76 vs $4).
+  // If any of these column sets returns real revenue we can eliminate the gap.
+  app.post('/debug/gam/probe-revenue', async () => {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const from = new Date(today);
+    from.setUTCDate(from.getUTCDate() - 6);
+
+    // Use the confirmed-working 4-dim combo. Only vary the columns.
+    const commonDims = ['DATE', 'AD_UNIT_NAME', 'SITE_NAME', 'COUNTRY_NAME'];
+
+    const matrix: { name: string; cols: string[] }[] = [
+      {
+        name: 'TOTAL_LINE_ITEM_LEVEL_* (revenue + impressions)',
+        cols: [
+          'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+        ],
+      },
+      {
+        name: 'AD_EXCHANGE_REVENUE + AD_EXCHANGE_IMPRESSIONS',
+        cols: ['AD_EXCHANGE_IMPRESSIONS', 'AD_EXCHANGE_REVENUE'],
+      },
+      {
+        name: 'AD_EXCHANGE_REVENUE only (single col)',
+        cols: ['AD_EXCHANGE_REVENUE'],
+      },
+      {
+        name: 'AD_EXCHANGE_LINE_ITEM_LEVEL_REVENUE variant',
+        cols: [
+          'AD_EXCHANGE_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'AD_EXCHANGE_LINE_ITEM_LEVEL_REVENUE',
+        ],
+      },
+      {
+        name: 'AD_EXCHANGE_ESTIMATED_REVENUE',
+        cols: ['AD_EXCHANGE_ESTIMATED_REVENUE'],
+      },
+      {
+        name: 'TOTAL_ESTIMATED_REVENUE',
+        cols: ['TOTAL_ESTIMATED_REVENUE'],
+      },
+      {
+        name: 'AD_EXCHANGE_MEASURABLE_IMPR + MEASURABLE_REVENUE',
+        cols: [
+          'AD_EXCHANGE_ACTIVE_VIEW_MEASURABLE_IMPRESSIONS',
+          'AD_EXCHANGE_TARGETED_REVENUE',
+        ],
+      },
+      {
+        name: 'Working baseline (impr count only)',
+        cols: [
+          'AD_EXCHANGE_ACTIVE_VIEW_MEASURABLE_IMPRESSIONS',
+          'AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE',
+        ],
+      },
+    ];
+
+    const results: unknown[] = [];
+    for (const entry of matrix) {
+      try {
+        const r = await runArbitrary({
+          dims: commonDims,
+          cols: entry.cols,
+          fromDate: from,
+          toDate: today,
+        });
+        results.push({
+          name: entry.name,
+          status: r.status,
+          fault: r.fault,
+          csvHeader: r.csvHeader,
+          csvRow1: r.csvRow1,
+          rowCount: r.rowCount,
+          // Which columns did GAM actually return? Compare header count to
+          // requested (dims + cols). If GAM stripped anything it'll be
+          // apparent from a shorter header.
+          headerColCount: r.csvHeader?.split(',').length ?? 0,
+          requestedColCount: commonDims.length + entry.cols.length,
+          allColsReturned:
+            (r.csvHeader?.split(',').length ?? 0) === commonDims.length + entry.cols.length,
+        });
+      } catch (e) {
+        results.push({ name: entry.name, error: (e as Error).message });
+      }
+    }
+    return ok({ results });
+  });
 }
