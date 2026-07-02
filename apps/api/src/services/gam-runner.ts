@@ -233,14 +233,92 @@ export async function runRefresh(
         `(${siteSharesByDate.size} days carry site breakdown, ${rowsViewability.length} viewability rows merged, ` +
         `${uniqueSites.size} unique sites)`,
     );
-    // Clear existing rows in this date range before upserting. This keeps the
-    // DB in sync with GAM's source of truth for TOTAL metrics; the site
-    // mapping we snapshotted above lives on the incoming rows via the split.
-    const deleted = await prisma.gamReport.deleteMany({
-      where: { date: { gte: new Date(fromIso), lte: new Date(toIso) } },
+    // Quality gate — count how many site-tagged rows are currently in the DB
+    // for this date range. If the incoming refresh has drastically fewer
+    // site-tagged rows (< 50% of current), abort to preserve existing state
+    // rather than overwrite good data with bad from a flaky GAM response.
+    const newSiteRows = rows.filter((r) => r.site !== '').length;
+    const existingSiteRows = await prisma.gamReport.count({
+      where: {
+        date: { gte: new Date(fromIso), lte: new Date(toIso) },
+        NOT: { site: '' },
+      },
     });
-    log.info(`gam.refresh: cleared ${deleted.count} stale rows in [${fromIso}, ${toIso}]`);
-    const upserted = await upsertRows(rows);
+    const qualityAborted =
+      existingSiteRows > 10 && newSiteRows < Math.floor(existingSiteRows * 0.5);
+    let deletedCount = 0;
+    let upserted = 0;
+    if (qualityAborted) {
+      const reason =
+        `new data has ${newSiteRows} site-tagged rows vs ${existingSiteRows} currently in DB ` +
+        `(${((newSiteRows / existingSiteRows) * 100).toFixed(1)}% coverage) — quality gate ` +
+        `aborted refresh to preserve DB state`;
+      log.warn(`gam.refresh: ${reason}`);
+    } else {
+      // Atomic transaction — delete + upsert all rows together. If ANY part
+      // fails (timeout, connection issue, chunk error), Postgres rolls back
+      // the whole thing and the DB stays in its previous consistent state.
+      // No more partial refreshes leaving site tags wiped.
+      await prisma.$transaction(
+        async (tx) => {
+          const del = await tx.gamReport.deleteMany({
+            where: { date: { gte: new Date(fromIso), lte: new Date(toIso) } },
+          });
+          deletedCount = del.count;
+          for (let i = 0; i < rows.length; i += CHUNK) {
+            const chunk = rows.slice(i, i + CHUNK);
+            for (const r of chunk) {
+              await tx.gamReport.upsert({
+                where: {
+                  gam_reports_unique_key: {
+                    networkId: env.GAM_NETWORK_CODE,
+                    date: r.date,
+                    campaign: r.campaign,
+                    source: r.source,
+                    headline: r.headline,
+                    lander: r.lander,
+                    image: r.image,
+                    adUnit: r.adUnit,
+                    site: r.site,
+                    page: r.page,
+                  },
+                },
+                create: {
+                  networkId: env.GAM_NETWORK_CODE,
+                  date: r.date,
+                  campaign: r.campaign,
+                  source: r.source,
+                  headline: r.headline,
+                  lander: r.lander,
+                  image: r.image,
+                  adUnit: r.adUnit,
+                  site: r.site,
+                  page: r.page,
+                  impressions: r.impressions,
+                  clicks: r.clicks,
+                  revenue: new Prisma.Decimal(r.revenue.toFixed(4)),
+                  ecpm: new Prisma.Decimal(r.ecpm.toFixed(4)),
+                  viewability: new Prisma.Decimal(r.viewability.toFixed(4)),
+                  matchRate: new Prisma.Decimal(r.matchRate.toFixed(4)),
+                },
+                update: {
+                  impressions: r.impressions,
+                  clicks: r.clicks,
+                  revenue: new Prisma.Decimal(r.revenue.toFixed(4)),
+                  ecpm: new Prisma.Decimal(r.ecpm.toFixed(4)),
+                  viewability: new Prisma.Decimal(r.viewability.toFixed(4)),
+                  matchRate: new Prisma.Decimal(r.matchRate.toFixed(4)),
+                  fetchedAt: new Date(),
+                },
+              });
+            }
+            upserted += chunk.length;
+          }
+        },
+        { timeout: 120_000, maxWait: 15_000 },
+      );
+      log.info(`gam.refresh: cleared ${deletedCount} stale rows and upserted ${upserted} in one transaction`);
+    }
     const durationMs = Date.now() - start;
 
     await prisma.cronRun.update({
@@ -249,15 +327,30 @@ export async function runRefresh(
         status: 'succeeded',
         finishedAt: new Date(),
         rowsAffected: upserted,
-        metadata: { trigger: opts.trigger, parsed: rows.length, upserted, durationMs },
+        metadata: {
+          trigger: opts.trigger,
+          parsed: rows.length,
+          upserted,
+          durationMs,
+          qualityAborted,
+          existingSiteRows,
+          newSiteRows,
+        },
       },
     });
     await prisma.auditLog.create({
       data: {
         actorEmail: opts.trigger,
-        action: 'cron.refresh.success',
+        action: qualityAborted ? 'cron.refresh.aborted_by_quality_gate' : 'cron.refresh.success',
         target: 'gam_reports',
-        metadata: { parsed: rows.length, upserted, durationMs },
+        metadata: {
+          parsed: rows.length,
+          upserted,
+          durationMs,
+          qualityAborted,
+          existingSiteRows,
+          newSiteRows,
+        },
       },
     });
 
@@ -284,6 +377,9 @@ export async function runRefresh(
         splitCount,
         splitRowsProduced,
         historicalFallbackCount,
+        qualityAborted,
+        existingSiteRows,
+        newSiteRows,
         historicalAdUnitsAvailable: historicalSharesByAdUnit.size,
         totalOutputRows: rows.length,
         siteSharesSample: siteDates.slice(0, 2).map((d) => ({
@@ -329,60 +425,3 @@ export async function runRefresh(
 }
 
 const CHUNK = 200;
-
-async function upsertRows(rows: ParsedReportRow[]): Promise<number> {
-  if (rows.length === 0) return 0;
-  let upserted = 0;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK);
-    await prisma.$transaction(
-      chunk.map((r) =>
-        prisma.gamReport.upsert({
-          where: {
-            gam_reports_unique_key: {
-              networkId: env.GAM_NETWORK_CODE,
-              date: r.date,
-              campaign: r.campaign,
-              source: r.source,
-              headline: r.headline,
-              lander: r.lander,
-              image: r.image,
-              adUnit: r.adUnit,
-              site: r.site,
-              page: r.page,
-            },
-          },
-          create: {
-            networkId: env.GAM_NETWORK_CODE,
-            date: r.date,
-            campaign: r.campaign,
-            source: r.source,
-            headline: r.headline,
-            lander: r.lander,
-            image: r.image,
-            adUnit: r.adUnit,
-            site: r.site,
-            page: r.page,
-            impressions: r.impressions,
-            clicks: r.clicks,
-            revenue: new Prisma.Decimal(r.revenue.toFixed(4)),
-            ecpm: new Prisma.Decimal(r.ecpm.toFixed(4)),
-            viewability: new Prisma.Decimal(r.viewability.toFixed(4)),
-            matchRate: new Prisma.Decimal(r.matchRate.toFixed(4)),
-          },
-          update: {
-            impressions: r.impressions,
-            clicks: r.clicks,
-            revenue: new Prisma.Decimal(r.revenue.toFixed(4)),
-            ecpm: new Prisma.Decimal(r.ecpm.toFixed(4)),
-            viewability: new Prisma.Decimal(r.viewability.toFixed(4)),
-            matchRate: new Prisma.Decimal(r.matchRate.toFixed(4)),
-            fetchedAt: new Date(),
-          },
-        }),
-      ),
-    );
-    upserted += chunk.length;
-  }
-  return upserted;
-}

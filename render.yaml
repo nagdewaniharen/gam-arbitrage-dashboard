@@ -119,7 +119,7 @@ services:
     runtime: node
     plan: starter
     region: singapore
-    schedule: "0 * * * *"  # top of every hour, UTC
+    schedule: "*/15 * * * *"  # every 15 min UTC — closer to real-time. Combined with the runner's atomic tx + quality gate, partial refreshes can't degrade DB state.
     rootDir: .
     buildCommand: echo "no build — script uses Node stdlib only"
     startCommand: node scripts/render-cron-refresh.mjs
