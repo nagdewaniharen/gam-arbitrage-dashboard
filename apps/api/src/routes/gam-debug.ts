@@ -394,6 +394,23 @@ export async function gamDebugRoutes(app: FastifyInstance) {
         name: 'AD_EXCHANGE_MATCHED_QUERIES',
         cols: ['AD_EXCHANGE_MATCHED_QUERIES'],
       },
+      // Now test combining AD_EXCHANGE_RESPONSES_SERVED (which showed +37%
+      // rows = has AdX-direct) with revenue columns.
+      {
+        name: 'AD_EXCHANGE_RESPONSES_SERVED + TOTAL_LINE_ITEM_LEVEL_REVENUE',
+        cols: [
+          'AD_EXCHANGE_RESPONSES_SERVED',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+        ],
+      },
+      {
+        name: 'AD_EXCHANGE_RESPONSES_SERVED + AD_EXCHANGE_REVENUE',
+        cols: ['AD_EXCHANGE_RESPONSES_SERVED', 'AD_EXCHANGE_REVENUE'],
+      },
+      {
+        name: 'AD_EXCHANGE_RESPONSES_SERVED alone',
+        cols: ['AD_EXCHANGE_RESPONSES_SERVED'],
+      },
     ];
 
     const results: unknown[] = [];
