@@ -299,6 +299,64 @@ export async function gamDebugRoutes(app: FastifyInstance) {
   // and under-counts low-volume-high-eCPM sites (e.g. s1.knowledgepuddle shows
   // $8 in our dashboard vs $1 in GAM UI; jobprivet shows $1.76 vs $4).
   // If any of these column sets returns real revenue we can eliminate the gap.
+  // Test AD_EXCHANGE_REVENUE with progressively fewer dimensions. If it
+  // works with 1-dim (DATE only) but fails with 4-dim, that's a dimension
+  // incompatibility, NOT a permission issue — meaning we CAN access it.
+  app.post('/debug/gam/probe-adx-dims', async () => {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const from = new Date(today);
+    from.setUTCDate(from.getUTCDate() - 6);
+
+    const dimSets = [
+      { name: 'DATE only', dims: ['DATE'] },
+      { name: 'DATE + AD_UNIT_NAME', dims: ['DATE', 'AD_UNIT_NAME'] },
+      { name: 'DATE + AD_UNIT_NAME + SITE_NAME', dims: ['DATE', 'AD_UNIT_NAME', 'SITE_NAME'] },
+      { name: 'DATE + AD_UNIT_NAME + COUNTRY_NAME', dims: ['DATE', 'AD_UNIT_NAME', 'COUNTRY_NAME'] },
+      { name: '4-dim (current site_breakdown)', dims: ['DATE', 'AD_UNIT_NAME', 'SITE_NAME', 'COUNTRY_NAME'] },
+      { name: 'DATE + SITE_NAME', dims: ['DATE', 'SITE_NAME'] },
+      { name: 'DATE + COUNTRY_NAME', dims: ['DATE', 'COUNTRY_NAME'] },
+    ];
+
+    const revenueCols = [
+      ['AD_EXCHANGE_IMPRESSIONS', 'AD_EXCHANGE_REVENUE'],
+      ['AD_EXCHANGE_IMPRESSIONS'],
+      ['AD_EXCHANGE_REVENUE'],
+      ['AD_EXCHANGE_ESTIMATED_REVENUE'],
+    ];
+
+    const results: unknown[] = [];
+    for (const d of dimSets) {
+      for (const cols of revenueCols) {
+        try {
+          const r = await runArbitrary({
+            dims: d.dims,
+            cols,
+            fromDate: from,
+            toDate: today,
+          });
+          const headerCols = r.csvHeader?.split(',').length ?? 0;
+          const requested = d.dims.length + cols.length;
+          results.push({
+            dims: d.name,
+            cols: cols.join('+'),
+            status: r.status,
+            fault: r.fault,
+            headerColCount: headerCols,
+            requestedColCount: requested,
+            allColsReturned: headerCols === requested,
+            csvHeader: r.csvHeader,
+            csvRow1: r.csvRow1,
+            rowCount: r.rowCount,
+          });
+        } catch (e) {
+          results.push({ dims: d.name, cols: cols.join('+'), error: (e as Error).message });
+        }
+      }
+    }
+    return ok({ results });
+  });
+
   app.post('/debug/gam/probe-revenue', async () => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
