@@ -374,6 +374,26 @@ export async function gamDebugRoutes(app: FastifyInstance) {
         name: 'AD_SERVER_ALL_ADS_IMPRESSIONS',
         cols: ['AD_SERVER_ALL_ADS_IMPRESSIONS'],
       },
+      {
+        name: 'TOTAL_ACTIVE_VIEW_MEASURABLE_IMPRESSIONS',
+        cols: ['TOTAL_ACTIVE_VIEW_MEASURABLE_IMPRESSIONS'],
+      },
+      {
+        name: 'AD_SERVER_ACTIVE_VIEW_MEASURABLE_IMPRESSIONS',
+        cols: ['AD_SERVER_ACTIVE_VIEW_MEASURABLE_IMPRESSIONS'],
+      },
+      {
+        name: 'AD_EXCHANGE_RESPONSES_SERVED + AD_EXCHANGE_MATCH_RATE',
+        cols: ['AD_EXCHANGE_RESPONSES_SERVED', 'AD_EXCHANGE_MATCH_RATE'],
+      },
+      {
+        name: 'TOTAL_AD_REQUESTS + AD_EXCHANGE_MATCH_RATE (derive impr)',
+        cols: ['TOTAL_AD_REQUESTS', 'AD_EXCHANGE_MATCH_RATE'],
+      },
+      {
+        name: 'AD_EXCHANGE_MATCHED_QUERIES',
+        cols: ['AD_EXCHANGE_MATCHED_QUERIES'],
+      },
     ];
 
     const results: unknown[] = [];
