@@ -243,16 +243,21 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
             ]
             : columnFamily === 'site_breakdown'
               ? [
-                // Probe c62f608 confirmed: TOTAL_LINE_ITEM_LEVEL_* revenue +
-                // impressions WORK with the 4-dim combo (DATE + AD_UNIT_NAME
-                // + SITE_NAME + COUNTRY_NAME). This gives us REAL per-(date,
-                // ad_unit, site, country) revenue directly from GAM instead
-                // of approximating via impression share. Kills the revenue
-                // gap the user was seeing (s1.knowledgepuddle $8 vs GAM $1,
-                // jobprivet $1.76 vs GAM $4).
+                // Probe 73fd7bc confirmed: LINE_ITEM_* columns miss AdX-
+                // direct traffic (rowCount 973 vs 1333 when RESPONSES_SERVED
+                // is added). The overlap probe showed rows are disjoint —
+                // AdX-direct rows have LINE_ITEM_IMPRESSIONS=0 while
+                // RESPONSES_SERVED shows the real count. Summing both
+                // columns in the parser captures full impression traffic
+                // (matches GAM UI's total). AdX revenue column is entirely
+                // stripped by this network — every AD_EXCHANGE_*_REVENUE
+                // variant tested returned status 500 or was silently
+                // dropped, so revenue stays line-item-only until the GAM
+                // admin grants AdX reporting scope.
                 'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
                 'TOTAL_LINE_ITEM_LEVEL_CLICKS',
                 'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+                'AD_EXCHANGE_RESPONSES_SERVED',
               ]
               : [
                 'AD_EXCHANGE_IMPRESSIONS',
@@ -496,18 +501,24 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
               r['country'] ??
               '',
             page: r['dimension_page'] ?? r['page'] ?? '',
-            impressions: BigInt(Math.floor(Number(
-              r['column_total_line_item_level_impressions'] ??
-              r['column_ad_server_impressions'] ??
-              r['column_ad_exchange_impressions'] ??
-              r['column_ad_exchange_line_item_level_impressions'] ??
-              // For site_breakdown rows on networks that strip AD_EXCHANGE_*,
-              // ACTIVE_VIEW measurable impressions is the count proxy that
-              // survives with DOMAIN dim.
-              r['column_ad_exchange_active_view_measurable_impressions'] ??
-              r['column_total_ad_requests'] ??
-              r['impressions'] ?? 0,
-            ))),
+            impressions: BigInt(Math.floor(
+              // site_breakdown queries include both LINE_ITEM_IMPRESSIONS
+              // (line-item-attributed) AND AD_EXCHANGE_RESPONSES_SERVED
+              // (AdX-direct). Probe confirmed these are disjoint per row —
+              // one is 0 when the other is non-zero — so summing captures
+              // total traffic without double-counting. Other queries only
+              // return one of these columns, so the "other" evaluates to 0.
+              Number(
+                r['column_total_line_item_level_impressions'] ??
+                r['column_ad_server_impressions'] ??
+                r['column_ad_exchange_impressions'] ??
+                r['column_ad_exchange_line_item_level_impressions'] ??
+                r['column_ad_exchange_active_view_measurable_impressions'] ??
+                r['column_total_ad_requests'] ??
+                r['impressions'] ?? 0,
+              )
+              + Number(r['column_ad_exchange_responses_served'] ?? 0),
+            )),
             clicks: BigInt(Math.floor(Number(
               r['column_total_line_item_level_clicks'] ??
               r['column_ad_server_clicks'] ??
@@ -524,13 +535,16 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             ) / 1_000_000,
             //new row gets a real eCPM
             ecpm: (() => {
-              const impr = Math.floor(Number(
-                r['column_total_line_item_level_impressions'] ??
-                r['column_ad_server_impressions'] ??
-                r['column_ad_exchange_impressions'] ??
-                r['column_ad_exchange_line_item_level_impressions'] ??
-                r['impressions'] ?? 0,
-              ));
+              const impr = Math.floor(
+                Number(
+                  r['column_total_line_item_level_impressions'] ??
+                  r['column_ad_server_impressions'] ??
+                  r['column_ad_exchange_impressions'] ??
+                  r['column_ad_exchange_line_item_level_impressions'] ??
+                  r['impressions'] ?? 0,
+                )
+                + Number(r['column_ad_exchange_responses_served'] ?? 0),
+              );
               const rev = Number(
                 r['column_total_line_item_level_cpm_and_cpc_revenue'] ??
                 r['column_ad_server_cpm_and_cpc_revenue'] ??
