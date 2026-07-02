@@ -357,6 +357,115 @@ export async function gamDebugRoutes(app: FastifyInstance) {
     return ok({ results });
   });
 
+  // The real problem: SOAP's SITE_NAME dim returns registered Site entity
+  // names — subdomains roll up to their base domain. GAM UI filters by URL
+  // string. Test URL/HOSTNAME dims paired with columns we know work.
+  app.post('/debug/gam/probe-url-dims', async () => {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const from = new Date(today);
+    from.setUTCDate(from.getUTCDate() - 6);
+
+    // Test each URL-flavored dim with working column families to see which
+    // combos succeed AND return >baseline row counts.
+    const combos = [
+      {
+        name: 'AD_EXCHANGE_URL + LINE_ITEM cols',
+        dims: ['DATE', 'AD_UNIT_NAME', 'AD_EXCHANGE_URL', 'COUNTRY_NAME'],
+        cols: [
+          'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+        ],
+      },
+      {
+        name: 'AD_EXCHANGE_URL + AdX LINE_ITEM cols',
+        dims: ['DATE', 'AD_UNIT_NAME', 'AD_EXCHANGE_URL', 'COUNTRY_NAME'],
+        cols: [
+          'AD_EXCHANGE_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'AD_EXCHANGE_LINE_ITEM_LEVEL_REVENUE',
+        ],
+      },
+      {
+        name: 'HOSTNAME + LINE_ITEM cols',
+        dims: ['DATE', 'AD_UNIT_NAME', 'HOSTNAME', 'COUNTRY_NAME'],
+        cols: [
+          'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+        ],
+      },
+      {
+        name: 'URL + LINE_ITEM cols',
+        dims: ['DATE', 'AD_UNIT_NAME', 'URL', 'COUNTRY_NAME'],
+        cols: [
+          'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+        ],
+      },
+      {
+        name: 'DOMAIN + LINE_ITEM cols',
+        dims: ['DATE', 'AD_UNIT_NAME', 'DOMAIN', 'COUNTRY_NAME'],
+        cols: [
+          'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+        ],
+      },
+      {
+        name: 'AD_EXCHANGE_HOSTNAME + LINE_ITEM cols',
+        dims: ['DATE', 'AD_UNIT_NAME', 'AD_EXCHANGE_HOSTNAME', 'COUNTRY_NAME'],
+        cols: [
+          'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+        ],
+      },
+      {
+        name: 'AD_EXCHANGE_SITE_NAME + LINE_ITEM cols',
+        dims: ['DATE', 'AD_UNIT_NAME', 'AD_EXCHANGE_SITE_NAME', 'COUNTRY_NAME'],
+        cols: [
+          'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+        ],
+      },
+      {
+        name: 'SITE_ID + LINE_ITEM cols',
+        dims: ['DATE', 'AD_UNIT_NAME', 'SITE_ID', 'COUNTRY_NAME'],
+        cols: [
+          'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+        ],
+      },
+    ];
+
+    const results: unknown[] = [];
+    for (const c of combos) {
+      try {
+        const r = await runArbitrary({
+          dims: c.dims,
+          cols: c.cols,
+          fromDate: from,
+          toDate: today,
+        });
+        const requested = c.dims.length + c.cols.length;
+        const got = r.csvHeader?.split(',').length ?? 0;
+        results.push({
+          name: c.name,
+          dims: c.dims.join('+'),
+          cols: c.cols.join('+'),
+          status: r.status,
+          fault: r.fault,
+          headerColCount: got,
+          requestedColCount: requested,
+          allColsReturned: got === requested,
+          csvHeader: r.csvHeader,
+          csvRow1: r.csvRow1,
+          rowCount: r.rowCount,
+        });
+      } catch (e) {
+        results.push({ name: c.name, error: (e as Error).message });
+      }
+    }
+    return ok({ results });
+  });
+
   app.post('/debug/gam/probe-revenue', async () => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
