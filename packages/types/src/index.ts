@@ -11,6 +11,7 @@ export type Dimension =
   | 'image'
   | 'ad_unit'
   | 'site'
+  | 'country'
   | 'page'
   | 'date';
 
@@ -22,6 +23,7 @@ export const VALID_DIMENSIONS: readonly Dimension[] = [
   'image',
   'ad_unit',
   'site',
+  'country',
   'page',
   'date',
 ] as const;
@@ -116,6 +118,10 @@ export interface StatusResponse {
 
 export interface SitesResponse {
   sites: string[];
+}
+
+export interface CountriesResponse {
+  countries: string[];
 }
 
 export interface ApiSuccess<T> {

@@ -15,6 +15,7 @@ const HUMAN_DIM: Record<Dimension, string> = {
   image: 'Image',
   ad_unit: 'Ad Unit',
   site: 'Site',
+  country: 'Country',
   page: 'Page',
   date: 'Date',
 };

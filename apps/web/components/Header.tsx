@@ -6,6 +6,7 @@ import { RefreshCw } from 'lucide-react';
 import type { Period, StatusResponse } from '@gam/types';
 import { PeriodSelector, type CustomRange } from './PeriodSelector';
 import { SiteFilter } from './SiteFilter';
+import { CountryFilter } from './CountryFilter';
 import { UserMenu } from './UserMenu';
 import { freshnessTier, relativeTime, formatIST } from '@/lib/time';
 import { cn } from '@/lib/cn';
@@ -19,6 +20,8 @@ export function Header({
   onCustomRangeChange,
   selectedSites,
   onSelectedSitesChange,
+  selectedCountries,
+  onSelectedCountriesChange,
   status,
   networkCode,
 }: {
@@ -28,6 +31,8 @@ export function Header({
   onCustomRangeChange?: (_r: CustomRange | null) => void;
   selectedSites: string[];
   onSelectedSitesChange: (_s: string[]) => void;
+  selectedCountries: string[];
+  onSelectedCountriesChange: (_c: string[]) => void;
   status: StatusResponse | undefined;
   networkCode: string;
 }) {
@@ -116,6 +121,7 @@ export function Header({
           <span className="hidden sm:inline">{refresh.isPending ? 'Refreshing' : 'Refresh'}</span>
         </button>
         <SiteFilter value={selectedSites} onChange={onSelectedSitesChange} />
+        <CountryFilter value={selectedCountries} onChange={onSelectedCountriesChange} />
         <PeriodSelector
           value={period}
           onChange={onPeriodChange}

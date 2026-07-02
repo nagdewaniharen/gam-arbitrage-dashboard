@@ -5,6 +5,14 @@ import { Prisma } from '@gam/db';
  * Empty/missing input → []. Whitespace-only entries are dropped.
  */
 export function parseSites(raw: string | undefined): string[] {
+  return parseCsvList(raw);
+}
+
+export function parseCountries(raw: string | undefined): string[] {
+  return parseCsvList(raw);
+}
+
+function parseCsvList(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
     .split(',')
@@ -13,13 +21,15 @@ export function parseSites(raw: string | undefined): string[] {
 }
 
 /**
- * Build a `WHERE date ... AND site = ANY(...)` clause for gam_reports queries.
- * Pass `prefix: 'AND'` for callers that already opened a `WHERE 1=1`.
+ * Build a `WHERE date ... AND site = ANY(...) AND country = ANY(...)` clause
+ * for gam_reports queries. Pass `prefix: 'AND'` for callers that already
+ * opened a `WHERE 1=1`.
  */
 export function whereGam(opts: {
   from: Date | null;
   to: Date | null;
   sites?: string[];
+  countries?: string[];
   prefix?: 'WHERE' | 'AND';
 }): Prisma.Sql {
   const conds: Prisma.Sql[] = [];
@@ -30,6 +40,9 @@ export function whereGam(opts: {
   }
   if (opts.sites && opts.sites.length > 0) {
     conds.push(Prisma.sql`site = ANY(${opts.sites})`);
+  }
+  if (opts.countries && opts.countries.length > 0) {
+    conds.push(Prisma.sql`country = ANY(${opts.countries})`);
   }
   if (conds.length === 0) return Prisma.empty;
   const head = Prisma.raw(opts.prefix === 'AND' ? 'AND' : 'WHERE');

@@ -13,6 +13,7 @@ const DIM_TO_COL: Record<Dimension, string> = {
   image: 'image',
   ad_unit: 'ad_unit',
   site: 'site',
+  country: 'country',
   page: 'page',
   date: 'date',
 };

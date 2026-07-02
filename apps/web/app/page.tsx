@@ -25,12 +25,15 @@ export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>('7d');
   const [customRange, setCustomRange] = useState<DateRange | null>(null);
   const [selectedSites, setSelectedSites] = useState<string[]>([]);
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   // Stable cache key for queries — switches to date-bracketed key when
   // a custom range is active so TanStack Query refetches correctly. Site
-  // selection is folded in so picking a different site triggers refetch.
+  // and country selections are folded in so switching either triggers refetch.
   const periodKey = customRange ? `custom:${customRange.from}..${customRange.to}` : period;
   const sitesKey = selectedSites.length === 0 ? 'all' : [...selectedSites].sort().join(',');
-  const filterKey = `${periodKey}|${sitesKey}`;
+  const countriesKey =
+    selectedCountries.length === 0 ? 'all' : [...selectedCountries].sort().join(',');
+  const filterKey = `${periodKey}|${sitesKey}|${countriesKey}`;
 
   const [dimA, setDimA] = useState<Dimension>('campaign');
   // PRD §9.2 wireframe: right breakdown defaults to "Ad Unit"
@@ -47,35 +50,35 @@ export default function DashboardPage() {
   // PRD §10.1 — auto-refresh every 5 min (300_000 ms). Browser tabs that
   // stay open update without a manual refresh button click.
   const REFRESH_MS = 5 * 60 * 1000;
-  const stats = useQuery({ queryKey: ['stats', filterKey], queryFn: () => api.stats(period, customRange, selectedSites), refetchInterval: REFRESH_MS });
-  const trend = useQuery({ queryKey: ['trend', filterKey], queryFn: () => api.trend(period, customRange, selectedSites), refetchInterval: REFRESH_MS });
+  const stats = useQuery({ queryKey: ['stats', filterKey], queryFn: () => api.stats(period, customRange, selectedSites, selectedCountries), refetchInterval: REFRESH_MS });
+  const trend = useQuery({ queryKey: ['trend', filterKey], queryFn: () => api.trend(period, customRange, selectedSites, selectedCountries), refetchInterval: REFRESH_MS });
 
   const breakA = useQuery({
     queryKey: ['breakdown', dimA, filterKey],
-    queryFn: () => api.breakdown(dimA, period, 100, customRange, selectedSites),
+    queryFn: () => api.breakdown(dimA, period, 100, customRange, selectedSites, selectedCountries),
     refetchInterval: REFRESH_MS,
   });
   const breakB = useQuery({
     queryKey: ['breakdown', dimB, filterKey],
-    queryFn: () => api.breakdown(dimB, period, 100, customRange, selectedSites),
+    queryFn: () => api.breakdown(dimB, period, 100, customRange, selectedSites, selectedCountries),
     refetchInterval: REFRESH_MS,
   });
 
   const cross = useQuery({
     queryKey: ['cross', crossDim1, crossDim2, filterKey],
-    queryFn: () => api.cross(crossDim1, crossDim2, period, 500, customRange, selectedSites),
+    queryFn: () => api.cross(crossDim1, crossDim2, period, 500, customRange, selectedSites, selectedCountries),
     enabled: crossDim1 !== crossDim2,
     refetchInterval: REFRESH_MS,
   });
 
   const top = useQuery({
     queryKey: ['performers', 'top', topBy, filterKey, topMinImpr],
-    queryFn: () => api.performers('top', topBy, period, 10, customRange, selectedSites),
+    queryFn: () => api.performers('top', topBy, period, 10, customRange, selectedSites, selectedCountries),
     refetchInterval: REFRESH_MS,
   });
   const bot = useQuery({
     queryKey: ['performers', 'bottom', bottomBy, filterKey, bottomMinImpr],
-    queryFn: () => api.performers('bottom', bottomBy, period, 10, customRange, selectedSites),
+    queryFn: () => api.performers('bottom', bottomBy, period, 10, customRange, selectedSites, selectedCountries),
     refetchInterval: REFRESH_MS,
   });
 
@@ -104,6 +107,8 @@ export default function DashboardPage() {
         onCustomRangeChange={setCustomRange}
         selectedSites={selectedSites}
         onSelectedSitesChange={setSelectedSites}
+        selectedCountries={selectedCountries}
+        onSelectedCountriesChange={setSelectedCountries}
         status={status.data}
         networkCode={NETWORK_CODE}
       />

@@ -117,7 +117,7 @@ export async function runRefresh(
         NOT: { site: '' },
         impressions: { gt: 0 },
       },
-      select: { adUnit: true, site: true, impressions: true },
+      select: { adUnit: true, site: true, country: true, impressions: true },
     });
     const historicalSharesByAdUnit = new Map<string, Map<string, bigint>>();
     for (const r of historicalRows) {
@@ -126,26 +126,34 @@ export async function runRefresh(
         inner = new Map();
         historicalSharesByAdUnit.set(r.adUnit, inner);
       }
-      inner.set(r.site, (inner.get(r.site) ?? 0n) + r.impressions);
+      // Historical shares are also keyed by (site, country) tuple to match
+      // the fresh site query's grouping. Preserves per-country attribution
+      // across flaky refreshes.
+      const tupleKey = `${r.site}::${r.country ?? ''}`;
+      inner.set(tupleKey, (inner.get(tupleKey) ?? 0n) + r.impressions);
     }
     log.info(
       `gam.refresh: historical fallback = ${historicalSharesByAdUnit.size} ad_units ` +
         `from ${historicalRows.length} rows (last 30d before ${fromIso})`,
     );
-    // Aggregate site query results per (date, ad_unit) — site_breakdown now
-    // uses DOMAIN + AD_UNIT_NAME dims (probe confirmed accepted), so each
-    // (date, ad_unit) row gets its own precise site distribution instead of
-    // a day-wide average.
+    // Aggregate site query results per (date, ad_unit) → (site, country)
+    // tuple distribution. site_breakdown query now includes COUNTRY_NAME dim,
+    // so each row is (date, ad_unit, site, country, impressions). We split
+    // TOTAL_* metrics across these tuples so per-country + per-site filters
+    // both work with correctly-attributed revenue.
     const siteSharesByDate = new Map<string, Map<string, bigint>>();
     for (const r of rowsSite) {
       if (!r.site) continue;
       const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
+      // Inner key encodes (site, country) tuple. Empty country stays '' —
+      // still a valid distinct bucket for un-attributed traffic.
+      const tupleKey = `${r.site}::${r.country ?? ''}`;
       let inner = siteSharesByDate.get(key);
       if (!inner) {
         inner = new Map();
         siteSharesByDate.set(key, inner);
       }
-      inner.set(r.site, (inner.get(r.site) ?? 0n) + r.impressions);
+      inner.set(tupleKey, (inner.get(tupleKey) ?? 0n) + r.impressions);
     }
     log.info(
       `gam.refresh: got site breakdown for ${siteSharesByDate.size} dates ` +
@@ -196,7 +204,13 @@ export async function runRefresh(
       let allocClicks = 0n;
       let allocRev = 0;
       const sortedShares = Array.from(shares.entries())
-        .map(([site, impressions]) => ({ site, impressions }))
+        .map(([tupleKey, impressions]) => {
+          // Decode "site::country" tuple key back into fields.
+          const sep = tupleKey.indexOf('::');
+          const site = sep >= 0 ? tupleKey.slice(0, sep) : tupleKey;
+          const country = sep >= 0 ? tupleKey.slice(sep + 2) : '';
+          return { site, country, impressions };
+        })
         .sort((a, b) => (b.impressions > a.impressions ? 1 : -1));
       sortedShares.forEach((s, idx) => {
         splitRowsProduced++;
@@ -217,6 +231,7 @@ export async function runRefresh(
         rows.push({
           ...merged,
           site: s.site,
+          country: s.country,
           impressions: imp,
           clicks,
           revenue,
@@ -226,7 +241,10 @@ export async function runRefresh(
     }
     const uniqueSites = new Set<string>();
     for (const inner of siteSharesByDate.values()) {
-      for (const site of inner.keys()) uniqueSites.add(site);
+      for (const tupleKey of inner.keys()) {
+        const sep = tupleKey.indexOf('::');
+        uniqueSites.add(sep >= 0 ? tupleKey.slice(0, sep) : tupleKey);
+      }
     }
     log.info(
       `gam.refresh: split ${rowsCore.length} core rows into ${rows.length} site-attributed rows ` +
@@ -272,6 +290,7 @@ export async function runRefresh(
         image: r.image,
         adUnit: r.adUnit,
         site: r.site,
+        country: r.country ?? '',
         page: r.page,
         impressions: r.impressions,
         clicks: r.clicks,

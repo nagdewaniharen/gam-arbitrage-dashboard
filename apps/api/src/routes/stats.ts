@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma, Prisma } from '@gam/db';
 import type { Period, StatsResponse } from '@gam/types';
 import { previousPeriodRange, resolveDateRange } from '../lib/period.js';
-import { parseSites, whereGam } from '../lib/filters.js';
+import { parseCountries, parseSites, whereGam } from '../lib/filters.js';
 import { ok } from '../lib/responses.js';
 
 interface TotalsRow {
@@ -13,7 +13,12 @@ interface TotalsRow {
   match_rate: Prisma.Decimal | null;
 }
 
-async function totalsForRange(from: Date | null, to: Date | null, sites: string[] = []): Promise<{
+async function totalsForRange(
+  from: Date | null,
+  to: Date | null,
+  sites: string[] = [],
+  countries: string[] = [],
+): Promise<{
   totalImpressions: number;
   totalClicks: number;
   totalRevenue: number;
@@ -22,7 +27,7 @@ async function totalsForRange(from: Date | null, to: Date | null, sites: string[
   viewability: number;
   matchRate: number;
 }> {
-  const where = whereGam({ from, to, sites });
+  const where = whereGam({ from, to, sites, countries });
 
   const rows = await prisma.$queryRaw<TotalsRow[]>(Prisma.sql`
     SELECT
@@ -52,7 +57,7 @@ async function totalsForRange(from: Date | null, to: Date | null, sites: string[
 }
 
 export async function statsRoutes(app: FastifyInstance) {
-  app.get<{ Querystring: { period?: Period; from?: string; to?: string; sites?: string } }>(
+  app.get<{ Querystring: { period?: Period; from?: string; to?: string; sites?: string; countries?: string } }>(
     '/stats',
     {
       schema: {
@@ -65,6 +70,7 @@ export async function statsRoutes(app: FastifyInstance) {
             from: { type: 'string', format: 'date' },
             to: { type: 'string', format: 'date' },
             sites: { type: 'string', description: 'Comma-separated site domains to filter by' },
+            countries: { type: 'string', description: 'Comma-separated country names to filter by' },
           },
         },
       },
@@ -73,13 +79,14 @@ export async function statsRoutes(app: FastifyInstance) {
       const period: Period = req.query.period ?? '7d';
       const { from, to, isCustom } = resolveDateRange(req.query);
       const sites = parseSites(req.query.sites);
-      const current = await totalsForRange(from, to, sites);
+      const countries = parseCountries(req.query.countries);
+      const current = await totalsForRange(from, to, sites, countries);
 
       let previousPeriod: StatsResponse['previousPeriod'];
       if (!isCustom && period !== 'all') {
         const prev = previousPeriodRange(period);
         if (prev.from && prev.to) {
-          const prevTotals = await totalsForRange(prev.from, prev.to, sites);
+          const prevTotals = await totalsForRange(prev.from, prev.to, sites, countries);
           const pct = (cur: number, p: number) => (p > 0 ? ((cur - p) / p) * 100 : 0);
           previousPeriod = {
             totalRevenue: prevTotals.totalRevenue,

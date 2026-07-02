@@ -33,6 +33,7 @@ model GamReport {
   image       String   @default("")
   adUnit      String   @default("") @map("ad_unit")
   site        String   @default("")
+  country     String   @default("")
   page        String   @default("")
   impressions BigInt   @default(0)
   clicks      BigInt   @default(0)
@@ -42,12 +43,13 @@ model GamReport {
   matchRate   Decimal  @default(0) @map("match_rate") @db.Decimal(5, 4)
   fetchedAt   DateTime @default(now()) @map("fetched_at") @db.Timestamptz()
 
-  @@unique([networkId, date, campaign, source, headline, lander, image, adUnit, site, page], name: "gam_reports_unique_key")
+  @@unique([networkId, date, campaign, source, headline, lander, image, adUnit, site, country, page], name: "gam_reports_unique_key")
   @@index([date])
   @@index([date, campaign])
   @@index([date, source])
   @@index([date, adUnit])
   @@index([date, site])
+  @@index([date, country])
   @@index([networkId, date])
   @@map("gam_reports")
 }

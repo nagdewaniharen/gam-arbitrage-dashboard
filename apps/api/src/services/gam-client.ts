@@ -178,6 +178,7 @@ export interface ParsedReportRow {
   lander: string;
   image: string;
   site: string;
+  country: string;
   page: string;
   impressions: bigint;
   clicks: bigint;
@@ -295,6 +296,11 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
       // UI's Interactive Report shows. Earlier attempts failed because
       // SITE_NAME rejected the AD_EXCHANGE_IMPRESSIONS/CLICKS/REVENUE cols.
       const siteDimXml = isSiteBreakdown ? '<ns:dimensions>SITE_NAME</ns:dimensions>' : '';
+      // Country probe (b019ae1) confirmed COUNTRY_NAME works with SITE_NAME
+      // + working ACTIVE_VIEW cols. Adding it here means each site_breakdown
+      // row is per (date, ad_unit, site, country) — that's the granularity
+      // we need to attribute per-country revenue correctly.
+      const countryDimXml = isSiteBreakdown ? '<ns:dimensions>COUNTRY_NAME</ns:dimensions>' : '';
       const adUnitViewXml = '<ns:adUnitView>TOP_LEVEL</ns:adUnitView>';
 
       // GAM v202511 ReportQuery XSD requires this exact element order:
@@ -305,6 +311,7 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
             <ns:dimensions>DATE</ns:dimensions>
             ${adUnitDimXml}
             ${siteDimXml}
+            ${countryDimXml}
             ${lineItemTypeDimXml}
             ${customDimsXml}
             ${adUnitViewXml}
@@ -478,6 +485,12 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
                 return raw;
               }
             })(),
+            country:
+              r['dimension_country_name'] ??
+              r['dimension_country_criteria_name'] ??
+              r['country_name'] ??
+              r['country'] ??
+              '',
             page: r['dimension_page'] ?? r['page'] ?? '',
             impressions: BigInt(Math.floor(Number(
               r['column_total_line_item_level_impressions'] ??
@@ -553,7 +566,7 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
         // (date, ad_unit, site, ...) doesn't get overwritten on upsert.
         const grouped = new Map<string, ParsedReportRow>();
         for (const row of out) {
-          const key = `${row.date.toISOString().slice(0, 10)}::${row.adUnit}::${row.site}`;
+          const key = `${row.date.toISOString().slice(0, 10)}::${row.adUnit}::${row.site}::${row.country}`;
           const existing = grouped.get(key);
           if (!existing) {
             grouped.set(key, row);

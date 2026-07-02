@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma, Prisma } from '@gam/db';
 import type { Period, TrendPoint, TrendResponse } from '@gam/types';
 import { resolveDateRange } from '../lib/period.js';
-import { parseSites, whereGam } from '../lib/filters.js';
+import { parseCountries, parseSites, whereGam } from '../lib/filters.js';
 import { ok } from '../lib/responses.js';
 
 interface RawTrend {
@@ -13,7 +13,7 @@ interface RawTrend {
 }
 
 export async function trendRoutes(app: FastifyInstance) {
-  app.get<{ Querystring: { period?: Period; from?: string; to?: string; sites?: string } }>(
+  app.get<{ Querystring: { period?: Period; from?: string; to?: string; sites?: string; countries?: string } }>(
     '/trend',
     {
       schema: {
@@ -24,6 +24,7 @@ export async function trendRoutes(app: FastifyInstance) {
           properties: {
             period: { type: 'string', enum: ['today', '7d', '30d', 'all'], default: '30d' },
             sites: { type: 'string', description: 'Comma-separated site domains to filter by' },
+            countries: { type: 'string', description: 'Comma-separated country names to filter by' },
           },
         },
       },
@@ -32,8 +33,9 @@ export async function trendRoutes(app: FastifyInstance) {
       const period: Period = req.query.period ?? '30d';
       const { from, to } = resolveDateRange(req.query);
       const sites = parseSites(req.query.sites);
+      const countries = parseCountries(req.query.countries);
 
-      const where = whereGam({ from, to, sites });
+      const where = whereGam({ from, to, sites, countries });
 
       const rows = await prisma.$queryRaw<RawTrend[]>(Prisma.sql`
         SELECT
