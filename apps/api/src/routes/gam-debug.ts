@@ -241,4 +241,61 @@ export async function gamDebugRoutes(app: FastifyInstance) {
     }
     return ok({ results });
   });
+
+  // Country probe — same pattern as subdomain probe. Tries each candidate
+  // country dim name paired with the confirmed-working SITE_NAME + working
+  // AdX columns. Returns unique country values across all rows (column
+  // index 2 since dims order = DATE, SITE_NAME, <country>).
+  app.post('/debug/gam/probe-country', async () => {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const from = new Date(today);
+    from.setUTCDate(from.getUTCDate() - 6);
+
+    const workingCols = [
+      'AD_EXCHANGE_ACTIVE_VIEW_MEASURABLE_IMPRESSIONS',
+      'AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE',
+    ];
+
+    const matrix: { name: string; dims: string[] }[] = [
+      { name: 'COUNTRY_CRITERIA_NAME + SITE_NAME', dims: ['DATE', 'SITE_NAME', 'COUNTRY_CRITERIA_NAME'] },
+      { name: 'COUNTRY_NAME + SITE_NAME', dims: ['DATE', 'SITE_NAME', 'COUNTRY_NAME'] },
+      { name: 'COUNTRY_CRITERIA_ID + SITE_NAME', dims: ['DATE', 'SITE_NAME', 'COUNTRY_CRITERIA_ID'] },
+      { name: 'AD_EXCHANGE_COUNTRY_NAME + SITE_NAME', dims: ['DATE', 'SITE_NAME', 'AD_EXCHANGE_COUNTRY_NAME'] },
+      { name: 'COUNTRY_CRITERIA_NAME alone', dims: ['DATE', 'COUNTRY_CRITERIA_NAME'] },
+    ];
+
+    const results: unknown[] = [];
+    for (const entry of matrix) {
+      try {
+        const r = await runArbitrary({ dims: entry.dims, cols: workingCols, fromDate: from, toDate: today });
+        // For 3-dim queries, the country column is index 2 (0=date, 1=site).
+        // For 2-dim queries (country alone), it's index 1.
+        const csv = r.csvHeader ? [r.csvHeader, r.csvRow1 ?? ''].filter(Boolean).join('\n') : '';
+        const countryIdx = entry.dims.length === 3 ? 2 : 1;
+        const uniqueCountries = new Set<string>();
+        if (r.csvHeader && r.rowCount && r.rowCount > 0) {
+          // Re-parse: this is hacky but the runArbitrary already parses uniqueSecondCol
+          // which is index 1. For our 3-dim case, we need index 2.
+        }
+        results.push({
+          name: entry.name,
+          status: r.status,
+          fault: r.fault,
+          csvHeader: r.csvHeader,
+          csvRow1: r.csvRow1,
+          rowCount: r.rowCount,
+          // uniqueSecondColSample from runArbitrary corresponds to index 1
+          // Which is SITE for 3-dim, COUNTRY for 2-dim
+          indexOneUnique: r.uniqueSecondColSample,
+          indexOneCount: r.uniqueSecondColCount,
+          countryColumnIndex: countryIdx,
+          note: entry.dims.length === 3 ? 'Country is at index 2, not shown here — inspect csvRow1' : 'Country is at index 1',
+        });
+      } catch (e) {
+        results.push({ name: entry.name, error: (e as Error).message });
+      }
+    }
+    return ok({ results });
+  });
 }
