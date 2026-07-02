@@ -441,6 +441,17 @@ export async function gamDebugRoutes(app: FastifyInstance) {
         name: 'AD_EXCHANGE_AD_REQUESTS',
         cols: ['AD_EXCHANGE_AD_REQUESTS'],
       },
+      // Decisive test: query LINE_ITEM_IMPRESSIONS + RESPONSES_SERVED
+      // together. If for the same row both are non-zero → double-count risk.
+      // If one is always 0 when the other is non-zero → safe to sum.
+      {
+        name: 'LINE_ITEM_IMPRESSIONS + RESPONSES_SERVED (overlap check)',
+        cols: [
+          'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+          'AD_EXCHANGE_RESPONSES_SERVED',
+          'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
+        ],
+      },
     ];
 
     const results: unknown[] = [];
