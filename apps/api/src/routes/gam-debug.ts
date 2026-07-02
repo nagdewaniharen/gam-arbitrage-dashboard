@@ -411,6 +411,36 @@ export async function gamDebugRoutes(app: FastifyInstance) {
         name: 'AD_EXCHANGE_RESPONSES_SERVED alone',
         cols: ['AD_EXCHANGE_RESPONSES_SERVED'],
       },
+      // Try every plausible AdX revenue column name — GAM UI shows AdX
+      // revenue so something must be accessible under the right name.
+      {
+        name: 'AD_EXCHANGE_ESTIMATED_REVENUE',
+        cols: ['AD_EXCHANGE_RESPONSES_SERVED', 'AD_EXCHANGE_ESTIMATED_REVENUE'],
+      },
+      {
+        name: 'AD_EXCHANGE_CPM_AND_CPC_REVENUE',
+        cols: ['AD_EXCHANGE_RESPONSES_SERVED', 'AD_EXCHANGE_CPM_AND_CPC_REVENUE'],
+      },
+      {
+        name: 'AD_EXCHANGE_TOTAL_REVENUE',
+        cols: ['AD_EXCHANGE_RESPONSES_SERVED', 'AD_EXCHANGE_TOTAL_REVENUE'],
+      },
+      {
+        name: 'TOTAL_ESTIMATED_REVENUE',
+        cols: ['AD_EXCHANGE_RESPONSES_SERVED', 'TOTAL_ESTIMATED_REVENUE'],
+      },
+      {
+        name: 'AD_EXCHANGE_IMPRESSIONS + AD_EXCHANGE_REVENUE',
+        cols: ['AD_EXCHANGE_IMPRESSIONS', 'AD_EXCHANGE_REVENUE'],
+      },
+      {
+        name: 'AD_EXCHANGE_IMPRESSIONS alone',
+        cols: ['AD_EXCHANGE_IMPRESSIONS'],
+      },
+      {
+        name: 'AD_EXCHANGE_AD_REQUESTS',
+        cols: ['AD_EXCHANGE_AD_REQUESTS'],
+      },
     ];
 
     const results: unknown[] = [];
