@@ -502,22 +502,25 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
               '',
             page: r['dimension_page'] ?? r['page'] ?? '',
             impressions: BigInt(Math.floor(
-              // site_breakdown queries include both LINE_ITEM_IMPRESSIONS
-              // (line-item-attributed) AND AD_EXCHANGE_RESPONSES_SERVED
-              // (AdX-direct). Probe confirmed these are disjoint per row —
-              // one is 0 when the other is non-zero — so summing captures
-              // total traffic without double-counting. Other queries only
-              // return one of these columns, so the "other" evaluates to 0.
-              Number(
-                r['column_total_line_item_level_impressions'] ??
-                r['column_ad_server_impressions'] ??
-                r['column_ad_exchange_impressions'] ??
-                r['column_ad_exchange_line_item_level_impressions'] ??
-                r['column_ad_exchange_active_view_measurable_impressions'] ??
-                r['column_total_ad_requests'] ??
-                r['impressions'] ?? 0,
-              )
-              + Number(r['column_ad_exchange_responses_served'] ?? 0),
+              // For c5.usseniorhelper.online India, LINE_ITEM_IMPRESSIONS
+              // already matched GAM UI exactly (900 imp / $2.87). Summing
+              // RESPONSES_SERVED would double-count line-item-served rows.
+              // Use LINE_ITEM as primary; only fall back to RESPONSES_SERVED
+              // when LINE_ITEM is 0 (AdX-direct-only rows, which the probe
+              // showed exist as +360 rows only visible in RESPONSES query).
+              (() => {
+                const lineItem = Number(
+                  r['column_total_line_item_level_impressions'] ??
+                  r['column_ad_server_impressions'] ??
+                  r['column_ad_exchange_impressions'] ??
+                  r['column_ad_exchange_line_item_level_impressions'] ??
+                  r['column_ad_exchange_active_view_measurable_impressions'] ??
+                  r['column_total_ad_requests'] ??
+                  r['impressions'] ?? 0,
+                );
+                if (lineItem > 0) return lineItem;
+                return Number(r['column_ad_exchange_responses_served'] ?? 0);
+              })(),
             )),
             clicks: BigInt(Math.floor(Number(
               r['column_total_line_item_level_clicks'] ??
@@ -535,15 +538,17 @@ async function parseGamCsv(csv: string, customKeys: { name: string; id: string }
             ) / 1_000_000,
             //new row gets a real eCPM
             ecpm: (() => {
+              const lineItemImpr = Number(
+                r['column_total_line_item_level_impressions'] ??
+                r['column_ad_server_impressions'] ??
+                r['column_ad_exchange_impressions'] ??
+                r['column_ad_exchange_line_item_level_impressions'] ??
+                r['impressions'] ?? 0,
+              );
               const impr = Math.floor(
-                Number(
-                  r['column_total_line_item_level_impressions'] ??
-                  r['column_ad_server_impressions'] ??
-                  r['column_ad_exchange_impressions'] ??
-                  r['column_ad_exchange_line_item_level_impressions'] ??
-                  r['impressions'] ?? 0,
-                )
-                + Number(r['column_ad_exchange_responses_served'] ?? 0),
+                lineItemImpr > 0
+                  ? lineItemImpr
+                  : Number(r['column_ad_exchange_responses_served'] ?? 0),
               );
               const rev = Number(
                 r['column_total_line_item_level_cpm_and_cpc_revenue'] ??
