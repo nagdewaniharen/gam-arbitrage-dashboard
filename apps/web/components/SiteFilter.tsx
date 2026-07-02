@@ -45,6 +45,23 @@ export function SiteFilter({
     }
   }
 
+  // "Select all" respects the current search — if user searches "c1" then
+  // clicks Select all, only c1-c19 subdomains get added, not everything.
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((s) => selectedSet.has(s));
+  function toggleAllFiltered() {
+    if (allFilteredSelected) {
+      // Uncheck all currently-filtered sites, keep others (edge case: nothing
+      // else in value, so this clears).
+      const removeSet = new Set(filtered);
+      onChange(value.filter((s) => !removeSet.has(s)));
+    } else {
+      // Merge filtered into current selection (preserves prior picks).
+      const merged = new Set([...value, ...filtered]);
+      onChange(Array.from(merged));
+    }
+  }
+
   return (
     <div className="relative inline-flex items-center">
       <button
@@ -119,7 +136,25 @@ export function SiteFilter({
                   {allSites.length === 0 ? 'No site data yet — refresh GAM after deploy.' : 'No matches'}
                 </div>
               ) : (
-                filtered.map((s) => {
+                <>
+                  <label
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer text-xs font-medium',
+                      'hover:bg-[--color-surface-2]/60 border-b border-[--color-border] mb-1',
+                      'text-[--color-text]',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleAllFiltered}
+                      className="h-3.5 w-3.5 accent-emerald-500"
+                    />
+                    <span>
+                      Select all{search ? ` matching (${filtered.length})` : ` (${filtered.length})`}
+                    </span>
+                  </label>
+                  {filtered.map((s) => {
                   const checked = selectedSet.has(s);
                   return (
                     <label
@@ -141,7 +176,8 @@ export function SiteFilter({
                       </span>
                     </label>
                   );
-                })
+                })}
+                </>
               )}
             </div>
           </div>
