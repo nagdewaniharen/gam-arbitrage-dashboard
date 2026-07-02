@@ -159,85 +159,64 @@ export async function runRefresh(
       `gam.refresh: got site breakdown for ${siteSharesByDate.size} dates ` +
         `from ${rowsSite.length} GAM rows`,
     );
-    let unsplitCount = 0;
-    let splitCount = 0;
-    let splitRowsProduced = 0;
-    let historicalFallbackCount = 0;
+    // Probe c62f608 revealed we can get REAL per-(date, ad_unit, site, country)
+    // revenue directly from GAM by including TOTAL_LINE_ITEM_LEVEL_* columns in
+    // the site_breakdown query. That's what rowsSite now contains. Use it as
+    // the source of truth instead of splitting rowsCore by impression share
+    // — the split approximation was over-counting high-volume-low-eCPM sites
+    // (s1.knowledgepuddle $8 vs GAM $1) and under-counting the opposite
+    // (jobprivet $1.76 vs GAM $4). Real per-site revenue eliminates the gap.
+    const unsplitCount = 0;
+    const splitCount = 0;
+    const splitRowsProduced = 0;
+    const historicalFallbackCount = 0;
     const rowsCoreDates = new Set<string>();
     for (const r of rowsCore) rowsCoreDates.add(r.date.toISOString().slice(0, 10));
     const siteDates = Array.from(siteSharesByDate.keys()).sort();
-    const missingDates = Array.from(rowsCoreDates).filter((d) => !siteSharesByDate.has(d));
-    const rows: ParsedReportRow[] = [];
-    for (const r of rowsCore) {
+    const missingDates = Array.from(rowsCoreDates).filter(
+      (d) => ![...siteSharesByDate.keys()].some((k) => k.startsWith(`${d}::`)),
+    );
+    // Merge viewability into each rowsSite entry, keep rowsSite's real
+    // per-(site, country) impressions + revenue as-is. Each rowsSite row
+    // becomes one DB row.
+    const rows: ParsedReportRow[] = rowsSite.map((r) => {
       const viewKey = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
       const v = viewabilityByKey.get(viewKey);
+      return v
+        ? { ...r, viewability: v.viewability, matchRate: v.matchRate }
+        : r;
+    });
+    // Fallback for any (date, ad_unit) that appears in rowsCore but not
+    // rowsSite — insert with empty site/country so we don't lose the traffic.
+    const rowsSiteKeys = new Set(
+      rowsSite.map((r) => `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`),
+    );
+    for (const r of rowsCore) {
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
+      if (rowsSiteKeys.has(key)) continue;
+      const v = viewabilityByKey.get(key);
       const merged = v
         ? { ...r, viewability: v.viewability, matchRate: v.matchRate }
         : r;
-      let shares = siteSharesByDate.get(`${r.date.toISOString().slice(0, 10)}::${r.adUnit}`);
-      if (!shares || shares.size === 0) {
-        // Fresh GAM had no site data for this (date, ad_unit) — fall back to
-        // the ad unit's historical site distribution so we don't wipe site
-        // attribution on a flaky refresh.
-        const historical = historicalSharesByAdUnit.get(r.adUnit);
-        if (historical && historical.size > 0) {
-          shares = historical;
-          historicalFallbackCount++;
-        }
-      }
-      if (!shares || shares.size === 0) {
-        rows.push(merged);
-        unsplitCount++;
-        continue;
-      }
-      const totalMapped = Array.from(shares.values()).reduce((a, x) => a + x, 0n);
-      if (totalMapped === 0n) {
-        rows.push(merged);
-        unsplitCount++;
-        continue;
-      }
-      splitCount++;
-      // Split each (date, ad_unit) TOTAL_* row across sites using the day's
-      // per-domain request share. Give the remainder to the largest site so
-      // per-ad-unit totals reconcile exactly.
-      let allocImp = 0n;
-      let allocClicks = 0n;
-      let allocRev = 0;
-      const sortedShares = Array.from(shares.entries())
-        .map(([tupleKey, impressions]) => {
-          // Decode "site::country" tuple key back into fields.
-          const sep = tupleKey.indexOf('::');
-          const site = sep >= 0 ? tupleKey.slice(0, sep) : tupleKey;
-          const country = sep >= 0 ? tupleKey.slice(sep + 2) : '';
-          return { site, country, impressions };
-        })
-        .sort((a, b) => (b.impressions > a.impressions ? 1 : -1));
-      sortedShares.forEach((s, idx) => {
-        splitRowsProduced++;
-        const isLast = idx === sortedShares.length - 1;
-        const share = Number(s.impressions) / Number(totalMapped);
-        const imp = isLast
-          ? merged.impressions - allocImp
-          : BigInt(Math.floor(Number(merged.impressions) * share));
-        const clicks = isLast
-          ? merged.clicks - allocClicks
-          : BigInt(Math.floor(Number(merged.clicks) * share));
-        const revenue = isLast
-          ? Math.max(0, merged.revenue - allocRev)
-          : merged.revenue * share;
-        allocImp += imp;
-        allocClicks += clicks;
-        allocRev += revenue;
-        rows.push({
-          ...merged,
-          site: s.site,
-          country: s.country,
-          impressions: imp,
-          clicks,
-          revenue,
-          ecpm: imp > 0n ? (revenue / Number(imp)) * 1000 : 0,
-        });
-      });
+      rows.push(merged);
+    }
+    // Reconciliation check — sum rowsSite revenue per (date, ad_unit) vs
+    // rowsCore. Warn if divergence > 10% so we can spot when GAM's
+    // site_breakdown misses traffic that rowsCore includes.
+    const coreRevByAdUnit = new Map<string, number>();
+    for (const r of rowsCore) {
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
+      coreRevByAdUnit.set(key, (coreRevByAdUnit.get(key) ?? 0) + r.revenue);
+    }
+    const siteRevByAdUnit = new Map<string, number>();
+    for (const r of rowsSite) {
+      const key = `${r.date.toISOString().slice(0, 10)}::${r.adUnit}`;
+      siteRevByAdUnit.set(key, (siteRevByAdUnit.get(key) ?? 0) + r.revenue);
+    }
+    let diverged = 0;
+    for (const [key, coreRev] of coreRevByAdUnit) {
+      const siteRev = siteRevByAdUnit.get(key) ?? 0;
+      if (coreRev > 0 && Math.abs(coreRev - siteRev) / coreRev > 0.1) diverged++;
     }
     const uniqueSites = new Set<string>();
     for (const inner of siteSharesByDate.values()) {
@@ -247,9 +226,10 @@ export async function runRefresh(
       }
     }
     log.info(
-      `gam.refresh: split ${rowsCore.length} core rows into ${rows.length} site-attributed rows ` +
-        `(${siteSharesByDate.size} days carry site breakdown, ${rowsViewability.length} viewability rows merged, ` +
-        `${uniqueSites.size} unique sites)`,
+      `gam.refresh: ${rowsSite.length} site-attributed rows from GAM (real per-site revenue), ` +
+        `+ ${rows.length - rowsSite.length} fallback rows from core, ` +
+        `${rowsViewability.length} viewability rows merged, ` +
+        `${uniqueSites.size} unique sites, ${diverged} ad_units diverged >10% from core`,
     );
     // Quality gate — count how many site-tagged rows are currently in the DB
     // for this date range. If the incoming refresh has drastically fewer

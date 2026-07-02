@@ -243,12 +243,16 @@ export async function runGamReport(opts: GamReportRunOptions, log: Logger): Prom
             ]
             : columnFamily === 'site_breakdown'
               ? [
-                // DOMAIN is incompatible with TOTAL_AD_REQUESTS and with the
-                // AD_EXCHANGE_IMPRESSIONS/REVENUE family (network config).
-                // Try the ACTIVE_VIEW count columns (same family as the rate
-                // column that we've confirmed works with DOMAIN).
-                'AD_EXCHANGE_ACTIVE_VIEW_MEASURABLE_IMPRESSIONS',
-                'AD_EXCHANGE_ACTIVE_VIEW_VIEWABLE_IMPRESSIONS_RATE',
+                // Probe c62f608 confirmed: TOTAL_LINE_ITEM_LEVEL_* revenue +
+                // impressions WORK with the 4-dim combo (DATE + AD_UNIT_NAME
+                // + SITE_NAME + COUNTRY_NAME). This gives us REAL per-(date,
+                // ad_unit, site, country) revenue directly from GAM instead
+                // of approximating via impression share. Kills the revenue
+                // gap the user was seeing (s1.knowledgepuddle $8 vs GAM $1,
+                // jobprivet $1.76 vs GAM $4).
+                'TOTAL_LINE_ITEM_LEVEL_IMPRESSIONS',
+                'TOTAL_LINE_ITEM_LEVEL_CLICKS',
+                'TOTAL_LINE_ITEM_LEVEL_CPM_AND_CPC_REVENUE',
               ]
               : [
                 'AD_EXCHANGE_IMPRESSIONS',
