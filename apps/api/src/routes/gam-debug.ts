@@ -269,15 +269,9 @@ export async function gamDebugRoutes(app: FastifyInstance) {
     for (const entry of matrix) {
       try {
         const r = await runArbitrary({ dims: entry.dims, cols: workingCols, fromDate: from, toDate: today });
-        // For 3-dim queries, the country column is index 2 (0=date, 1=site).
+        // For 3-dim queries, country column is index 2 (0=date, 1=site).
         // For 2-dim queries (country alone), it's index 1.
-        const csv = r.csvHeader ? [r.csvHeader, r.csvRow1 ?? ''].filter(Boolean).join('\n') : '';
         const countryIdx = entry.dims.length === 3 ? 2 : 1;
-        const uniqueCountries = new Set<string>();
-        if (r.csvHeader && r.rowCount && r.rowCount > 0) {
-          // Re-parse: this is hacky but the runArbitrary already parses uniqueSecondCol
-          // which is index 1. For our 3-dim case, we need index 2.
-        }
         results.push({
           name: entry.name,
           status: r.status,
