@@ -104,6 +104,34 @@ export async function runRefresh(
     }
     const fromIso = fromDate.toISOString().slice(0, 10);
     const toIso = toDate.toISOString().slice(0, 10);
+    // Snapshot historical per-ad_unit site distribution from data OUTSIDE
+    // the refresh window (last 30 days before fromDate). This is our fallback
+    // when GAM's site_breakdown returns partial or empty data for a specific
+    // (date, ad_unit) — instead of losing site attribution and landing rows
+    // with site='', we use the ad unit's known historical site mix.
+    const historicalFrom = new Date(fromIso);
+    historicalFrom.setUTCDate(historicalFrom.getUTCDate() - 30);
+    const historicalRows = await prisma.gamReport.findMany({
+      where: {
+        date: { gte: historicalFrom, lt: new Date(fromIso) },
+        NOT: { site: '' },
+        impressions: { gt: 0 },
+      },
+      select: { adUnit: true, site: true, impressions: true },
+    });
+    const historicalSharesByAdUnit = new Map<string, Map<string, bigint>>();
+    for (const r of historicalRows) {
+      let inner = historicalSharesByAdUnit.get(r.adUnit);
+      if (!inner) {
+        inner = new Map();
+        historicalSharesByAdUnit.set(r.adUnit, inner);
+      }
+      inner.set(r.site, (inner.get(r.site) ?? 0n) + r.impressions);
+    }
+    log.info(
+      `gam.refresh: historical fallback = ${historicalSharesByAdUnit.size} ad_units ` +
+        `from ${historicalRows.length} rows (last 30d before ${fromIso})`,
+    );
     // Aggregate site query results per (date, ad_unit) — site_breakdown now
     // uses DOMAIN + AD_UNIT_NAME dims (probe confirmed accepted), so each
     // (date, ad_unit) row gets its own precise site distribution instead of
@@ -126,6 +154,7 @@ export async function runRefresh(
     let unsplitCount = 0;
     let splitCount = 0;
     let splitRowsProduced = 0;
+    let historicalFallbackCount = 0;
     const rowsCoreDates = new Set<string>();
     for (const r of rowsCore) rowsCoreDates.add(r.date.toISOString().slice(0, 10));
     const siteDates = Array.from(siteSharesByDate.keys()).sort();
@@ -137,7 +166,17 @@ export async function runRefresh(
       const merged = v
         ? { ...r, viewability: v.viewability, matchRate: v.matchRate }
         : r;
-      const shares = siteSharesByDate.get(`${r.date.toISOString().slice(0, 10)}::${r.adUnit}`);
+      let shares = siteSharesByDate.get(`${r.date.toISOString().slice(0, 10)}::${r.adUnit}`);
+      if (!shares || shares.size === 0) {
+        // Fresh GAM had no site data for this (date, ad_unit) — fall back to
+        // the ad unit's historical site distribution so we don't wipe site
+        // attribution on a flaky refresh.
+        const historical = historicalSharesByAdUnit.get(r.adUnit);
+        if (historical && historical.size > 0) {
+          shares = historical;
+          historicalFallbackCount++;
+        }
+      }
       if (!shares || shares.size === 0) {
         rows.push(merged);
         unsplitCount++;
@@ -244,6 +283,8 @@ export async function runRefresh(
         unsplitCount,
         splitCount,
         splitRowsProduced,
+        historicalFallbackCount,
+        historicalAdUnitsAvailable: historicalSharesByAdUnit.size,
         totalOutputRows: rows.length,
         siteSharesSample: siteDates.slice(0, 2).map((d) => ({
           date: d,
